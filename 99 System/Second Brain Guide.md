@@ -142,10 +142,14 @@ To keep a folder (e.g. work or private notes) completely out of the AI's reach, 
 ```
 Commands and the board plugin will never read, link or write it, and `lint` verifies with file hashes that nothing changed (run `python "99 System/scripts/vault_tool.py" protected-baseline` once after adding it). For extra safety, also exclude it from Git in `.gitignore`. `wip_limit` (e.g. `3`) makes `lint` warn when too many tasks are in progress.
 
-## Version control (optional)
-1. `git init` in the vault folder (or create your repo from this template on GitHub). `.gitignore` and `.gitattributes` are already set up, so files stay byte-identical across machines.
-2. Install the community plugin **Git** (by Vinzent) in Obsidian for automatic commits and pushes on an interval.
-3. Use a **private** repository for your personal vault.
+## Version control
+The vault is a Git repository (setup creates it) and the bundled **Git** plugin (by Vinzent03) records history automatically.
+- **Local only (default):** a commit every 10 minutes. Nothing leaves your computer.
+- **With your own private repo:** run setup with `-Remote <url>` (Windows) / `--remote <url>` (macOS/Linux). It pushes the vault and switches the plugin to commit + push every 10 minutes and pull on startup.
+- **Old versions:** `Ctrl/Cmd+P` → *Git: Open file history*, or the *Source Control* view. Manual backup: *Git: Commit-and-sync*.
+- **Settings:** *Settings → Git* (interval, commit message, pull/push).
+- `.gitattributes` keeps every file byte-identical across machines; `.gitignore` excludes device-specific state. **Add your protected folders to `.gitignore` too** if they shouldn't be versioned.
+- Use a **private** repository for your personal vault. Don't want Git at all? Disable the Git plugin in *Settings → Community plugins* and run setup with `-NoGit` / `--no-git`.
 
 ## Weekly maintenance (15 min)
 1. `/sb-review`: weekly review note with focus, dates, pending decisions, maintenance list.
@@ -159,5 +163,5 @@ Commands and the board plugin will never read, link or write it, and `lint` veri
 - **Before adding a folder**, check whether `type`, `project` or a MOC already does the job. Maximum depth: `Category/Project/note`.
 - **Move and rename files inside Obsidian** (*Automatically update internal links* is on); moving them outside Obsidian breaks links.
 - **AI output is a source, not knowledge.** Version numbers, dates, prices and citations from AI chats shouldn't enter knowledge notes unverified.
-- **Plugins:** only the bundled board plugin is needed. Optional: *Homepage* (open Home at startup), *QuickAdd* (one-key capture), the official *Web Clipper* (clip articles into the Inbox, then `/sb-ingest`). Dataview isn't needed; Bases covers it.
+- **Plugins:** the bundled board and Git plugins are all you need. Optional: *Homepage* (open Home at startup), *QuickAdd* (one-key capture), the official *Web Clipper* (clip articles into the Inbox, then `/sb-ingest`). Dataview isn't needed; Bases covers it.
 - **Example notes:** everything marked `example: true` can be removed with `python "99 System/scripts/vault_tool.py" clean-examples --yes`.

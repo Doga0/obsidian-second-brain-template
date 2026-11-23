@@ -10,10 +10,11 @@ A ready-to-use Obsidian vault for running a **second brain**: projects, research
 - ✅ **Decision log:** decisions are notes you approve with one click; AI-suggested decisions stay "proposed" until you accept them
 - 🤖 **17 AI commands** (`/sb-ingest`, `/sb-ask`, `/sb-plan`, `/sb-review`, `/sb-challenge`, …) following the LLM-Wiki pattern (ingest → query → lint), with safety rules: propose before writing, never edit raw sources, log every change
 - 📊 **Dashboards** built with native Obsidian Bases: pending decisions, active projects, AI queue, Inbox
+- 🕓 **Version history built in:** the bundled Git plugin auto-commits every 10 minutes; connect your own private repo for off-site backup and multi-device sync
 - 🔒 **Protected folders:** keep private folders completely out of the AI's reach
 - 🧪 Fictional **example notes** you can delete with one command
 
-No paid plugins and no API keys. The board plugin is bundled in the vault; everything else is native Obsidian.
+No paid plugins and no API keys. Two community plugins come bundled and enabled: **Second Brain Board** (part of this template) and **[Git](https://github.com/Vinzent03/obsidian-git)** by Vinzent03 (MIT, v2.43.0, unmodified, license included). Everything else is native Obsidian.
 
 ## Install
 
@@ -28,14 +29,23 @@ d="$HOME/Documents/Second Brain"; curl -L https://github.com/Doga0/obsidian-seco
 ```
 
 The command downloads the template into `Documents/Second Brain` and runs the setup script, which:
-- installs Obsidian and Python if they're missing (Windows: winget · macOS: Homebrew)
+- installs Obsidian, Python and Git if they're missing (Windows: winget · macOS: Homebrew)
 - creates the folder structure
+- turns the vault into a Git repository with a first commit (local version history)
 - registers the folder as an Obsidian vault and opens it
 - runs a health check
 
-When Obsidian asks whether to **trust this vault's plugins**, choose trust: that enables the board.
+When Obsidian asks whether to **trust this vault's plugins**, choose trust: that enables the board and Git.
 
-**Prefer to keep your vault in Git?** Click **Use this template** on GitHub, create a **private** repository, clone it, then run `setup.ps1` / `setup.sh` inside it.
+### Back up to your own private repository (optional)
+Out of the box the Git plugin keeps **local** history only. To also push to GitHub (backup + other devices), create an **empty private** repository and run:
+```powershell
+powershell -ExecutionPolicy Bypass -File "$HOME\Documents\Second Brain\setup.ps1" -Remote https://github.com/<you>/<repo>.git
+```
+```bash
+bash "$HOME/Documents/Second Brain/setup.sh" --remote https://github.com/<you>/<repo>.git
+```
+Setup pushes your vault and switches the Git plugin to automatic sync (commit + push every 10 minutes, pull on startup). Or click **Use this template** on GitHub, clone your new private repo and run setup inside it: the remote is detected automatically. Optional: `-GitName` / `-GitEmail` (`--git-name` / `--git-email`) set the commit identity.
 
 **Manual install:** download the ZIP, unzip it anywhere, open the folder in Obsidian with *Open folder as vault*, and enable the **Second Brain Board** plugin in *Settings → Community plugins*.
 
@@ -44,6 +54,7 @@ When Obsidian asks whether to **trust this vault's plugins**, choose trust: that
 |---|---|
 | [Obsidian](https://obsidian.md) 1.9+ | everything (Bases need 1.9) |
 | Python 3.8+ | the AI commands' helper script (`vault_tool.py`) |
+| [Git](https://git-scm.com) | version history (installed by setup on Windows; optional) |
 | [Claude Code](https://claude.com/claude-code) | the `/sb-*` AI commands (optional: the vault works without it) |
 
 ## First steps
@@ -90,4 +101,4 @@ The rules every command follows are in [`CLAUDE.md`](CLAUDE.md). Commands live i
 - If you keep your vault in Git, use a **private** repository.
 
 ## License
-[MIT](LICENSE)
+[MIT](LICENSE). The bundled [Obsidian Git](https://github.com/Vinzent03/obsidian-git) plugin is MIT-licensed by its authors; see `.obsidian/plugins/obsidian-git/LICENSE`.

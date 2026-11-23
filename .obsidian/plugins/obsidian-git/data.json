@@ -1,0 +1,12 @@
+{
+  "autoSaveInterval": 10,
+  "autoBackupAfterFileChange": false,
+  "differentIntervalCommitAndPush": false,
+  "autoPullOnBoot": false,
+  "disablePush": true,
+  "pullBeforePush": true,
+  "syncMethod": "merge",
+  "autoCommitMessage": "vault backup: {{date}}",
+  "commitMessage": "vault backup: {{date}}",
+  "showStatusBar": true
+}

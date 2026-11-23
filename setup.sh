@@ -5,14 +5,20 @@
 #   bash setup.sh --skip-install --no-obsidian
 set -euo pipefail
 
-SKIP_INSTALL=0; NO_OBSIDIAN=0; REMOVE_EXAMPLES=0
-for a in "$@"; do
-  case "$a" in
+#   bash setup.sh --remote https://github.com/<you>/<private-repo>.git   # back up to your own repo
+SKIP_INSTALL=0; NO_OBSIDIAN=0; REMOVE_EXAMPLES=0; NO_GIT=0; REMOTE=""; GIT_NAME=""; GIT_EMAIL=""
+while [ $# -gt 0 ]; do
+  case "$1" in
     --skip-install) SKIP_INSTALL=1 ;;
     --no-obsidian) NO_OBSIDIAN=1 ;;
     --remove-examples) REMOVE_EXAMPLES=1 ;;
-    *) echo "unknown option: $a"; exit 1 ;;
+    --no-git) NO_GIT=1 ;;
+    --remote) REMOTE="${2:?--remote needs a URL}"; shift ;;
+    --git-name) GIT_NAME="${2:?--git-name needs a value}"; shift ;;
+    --git-email) GIT_EMAIL="${2:?--git-email needs a value}"; shift ;;
+    *) echo "unknown option: $1"; exit 1 ;;
   esac
+  shift
 done
 
 VAULT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -52,18 +58,66 @@ for d in "00 Inbox" "15 Tasks" "60 Resources/Attachments" "70 Analyses" "90 Arch
   [ -d "$d" ] || { mkdir -p "$d"; ok "created: $d"; }
 done
 ok "Folder structure complete"
+if [ "$REMOVE_EXAMPLES" = 1 ] && [ -n "$PY" ]; then step "Example notes"; "$PY" "$TOOL" clean-examples --yes; fi
 
-# ------------------------------------------------------------------ 3. git (optional)
-if [ -d .git ] && has git; then
-  step "Git"
-  git config core.autocrlf false
-  git config core.quotepath false
-  ok "Line-ending conversion off for this repo"
+# ------------------------------------------------------------------ 3. git: version history for the Obsidian Git plugin
+if [ "$NO_GIT" = 0 ]; then
+  step "Git (version history)"
+  if ! has git && [ "$SKIP_INSTALL" = 0 ] && [ "$OS" = "Darwin" ] && has brew; then brew install git; fi
+  if ! has git; then
+    warn "Git not found: version history is off. Install Git (https://git-scm.com) and run setup again, or disable the Git plugin in Obsidian."
+  else
+    if [ ! -d .git ]; then git init -b main -q; ok "Initialized a Git repository"; else ok "Git repository found"; fi
+    git config core.autocrlf false
+    git config core.quotepath false
+    [ -n "$GIT_NAME" ] && git config user.name "$GIT_NAME"
+    [ -n "$GIT_EMAIL" ] && git config user.email "$GIT_EMAIL"
+    PLACEHOLDER=0
+    git config user.name >/dev/null || { git config user.name "Second Brain"; PLACEHOLDER=1; }
+    git config user.email >/dev/null || { git config user.email "second-brain@localhost"; PLACEHOLDER=1; }
+    [ "$PLACEHOLDER" = 1 ] && warn 'No Git identity found; using "Second Brain <second-brain@localhost>" for this vault. Change it with --git-name/--git-email.'
+    ORIGIN="$(git remote get-url origin 2>/dev/null || true)"
+    if printf '%s' "$ORIGIN" | grep -Eq 'Doga0/obsidian-second-brain-template(\.git)?/?$'; then
+      git remote remove origin; ORIGIN=""
+      warn "This copy was cloned from the template repository; detached it. Use --remote <your-repo-url> to connect your own."
+    fi
+    if [ -n "$REMOTE" ]; then
+      if [ -n "$ORIGIN" ]; then git remote set-url origin "$REMOTE"; else git remote add origin "$REMOTE"; fi
+      ORIGIN="$REMOTE"; ok "Remote set: $REMOTE"
+    fi
+    if ! git rev-parse --verify HEAD >/dev/null 2>&1; then
+      git add -A
+      if git commit -q -m "Initial vault from obsidian-second-brain-template"; then ok "First commit created"; else warn 'First commit failed; run "git commit" manually'; fi
+    fi
+    PUSH_ON=false
+    if [ -n "$ORIGIN" ]; then
+      if git push -q -u origin "$(git rev-parse --abbrev-ref HEAD)" 2>/dev/null; then PUSH_ON=true; ok "Pushed to $ORIGIN; automatic sync enabled"
+      else warn "Push to $ORIGIN failed (sign in or check the URL). Keeping local-only history; run setup again after fixing."; fi
+    else ok "No remote: the Git plugin keeps local history only (auto-commit every 10 minutes)"; fi
+    GCFG=".obsidian/plugins/obsidian-git/data.json"
+    if [ -f "$GCFG" ] && [ -n "$PY" ]; then
+      CHANGED="$("$PY" - "$GCFG" "$PUSH_ON" <<'PY'
+import json, sys
+p, on = sys.argv[1], sys.argv[2] == "true"
+d = json.load(open(p, encoding="utf-8"))
+if d.get("disablePush") != (not on) or d.get("autoPullOnBoot") != on:
+    d["disablePush"] = not on
+    d["autoPullOnBoot"] = on
+    json.dump(d, open(p, "w", encoding="utf-8"), indent=2)
+    print("yes")
+PY
+)"
+      if [ "$CHANGED" = "yes" ]; then
+        git add -- "$GCFG"
+        if [ "$PUSH_ON" = true ]; then git commit -q -m "Git plugin: enable automatic sync" && git push -q 2>/dev/null || true
+        else git commit -q -m "Git plugin: local history only" || true; fi
+      fi
+    fi
+  fi
 fi
 
-# ------------------------------------------------------------------ 4. examples / protected folders
+# ------------------------------------------------------------------ 4. protected folders
 if [ -n "$PY" ]; then
-  if [ "$REMOVE_EXAMPLES" = 1 ]; then step "Example notes"; "$PY" "$TOOL" clean-examples --yes; fi
   if "$PY" -c 'import json,sys; sys.exit(0 if json.load(open("99 System/config.json")).get("protected") else 1)' 2>/dev/null; then
     step "Protected folders"; "$PY" "$TOOL" protected-baseline
   fi
@@ -110,7 +164,7 @@ fi
 
 # ------------------------------------------------------------------ 6. health
 step "Health check"
-if [ -n "$PY" ]; then "$PY" "$TOOL" lint | head -9; else warn "Python missing; health check skipped"; fi
+if [ -n "$PY" ]; then "$PY" "$TOOL" lint --no-write | head -9; else warn "Python missing; health check skipped"; fi
 
 step "Done"
 cat <<EOF
@@ -118,4 +172,5 @@ cat <<EOF
     - Start at Home.md, then read 99 System/Second Brain Guide.md
     - AI commands (/sb-*): open this folder in Claude Code (https://claude.com/claude-code) and type /sb-
     - Remove the example notes: bash setup.sh --remove-examples
+    - Back up to your own private repo: bash setup.sh --remote <repo-url>
 EOF
