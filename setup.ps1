@@ -76,7 +76,9 @@ if (-not $NoObsidian) {
 
 # ------------------------------------------------------------------ 2. folders
 Step 'Folders'
-foreach ($d in @('00 Inbox', '15 Tasks', '60 Resources\Attachments', '70 Analyses', '90 Archive')) {
+foreach ($d in @('Personal\00 Inbox', 'Personal\15 Tasks', 'Personal\60 Resources\Attachments', 'Personal\70 Analyses', 'Personal\90 Archive',
+                 'Work\00 Inbox', 'Work\10 Projects', 'Work\20 Meetings', 'Work\30 Organizations & People', 'Work\40 Systems & APIs',
+                 'Work\50 Tasks', 'Work\60 Attachments', 'Work\70 Analyses', 'Work\90 Archive')) {
   $p = Join-Path $Vault $d
   if (-not (Test-Path -LiteralPath $p)) { New-Item -ItemType Directory -Path $p | Out-Null; Ok "created: $d" }
 }

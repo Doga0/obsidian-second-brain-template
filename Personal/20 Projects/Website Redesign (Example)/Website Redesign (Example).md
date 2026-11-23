@@ -24,7 +24,7 @@ Replace the old personal website with a faster, simpler one that's easy to updat
 filters:
   and:
     - 'type == "decision"'
-    - 'file.inFolder("20 Projects/Website Redesign (Example)")'
+    - 'file.inFolder("Personal/20 Projects/Website Redesign (Example)")'
 views:
   - type: table
     name: Decisions

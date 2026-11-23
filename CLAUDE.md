@@ -9,29 +9,46 @@ Rules every AI agent (Claude Code) follows in this vault. Obsidian is the interf
 4. **Mark AI-generated content.** Your commentary and inferences go in a `> [!info]` / `> [!tip] AI observation` callout or a `type: analysis` note. Never write it as if it were the user's words.
 5. **No fabrication.** If a date, number, citation or result isn't known, leave it blank or write "unverified". Don't add `created` to notes whose creation date is unknown.
 6. **Log every write** with `python "99 System/scripts/vault_tool.py" log <command> "<what changed>"`.
-7. **Every link has a reason.** Write `[[Note]] — why it's related`. Don't add links without one. Don't target headings that contain `:`, `|`, `^`, `[`, `]`; link the note and write "§N" instead.
+7. **Keep the two areas apart.** The vault is split into `Personal/` and `Work/`. Every command takes `--scope personal|work|all`; without it, reading and analysis cover **all**, and writing goes to the area of the note/project in question (ask if unclear). Move notes between areas, or link work notes to personal ones, only when the user asks. Don't copy work content into personal notes.
+8. **Every link has a reason.** Write `[[Note]] — why it's related`. Don't add links without one. Don't target headings that contain `:`, `|`, `^`, `[`, `]`; link the note and write "§N" instead.
 
 ## 1. Structure
+The root holds only `Personal/`, `Work/`, the shared `99 System/` and `Home.md`, `Board.md`, `CLAUDE.md`, `README.md`.
+
+**Personal/**
 | Folder | Contents |
 |---|---|
-| `00 Inbox` | New, unprocessed notes (no metadata required) |
-| `10 Maps` | Maps of content, named `MOC - <Area>` |
-| `15 Tasks` | Task cards (`type: task`), flat; linked to a project via `project`. Board: `Board.md` |
-| `20 Projects/<Name>/` | Project folder + hub with the same name (`<Name>.md`), source notes, `Decision - …` notes |
-| `30 Research/<Name>/` | Research folder + hub, experiment files |
-| `40 Knowledge` | Evergreen concept notes (flat) |
-| `50 Ideas` | Ideas not yet started |
-| `60 Resources` | Reading lists, `Attachments/` |
-| `70 Analyses` | AI analysis output (`type: analysis`), weekly reviews |
-| `90 Archive` | Closed project/research folders (moved whole) |
-| `99 System` | Guide, Templates, `Index.md`, `Log.md`, `Health.md`, `AI Queue.md`, `config.json`, `scripts/` |
+| `Personal/00 Inbox` | New, unprocessed notes (no metadata required) |
+| `Personal/10 Maps` | Maps of content, named `MOC - <Area>` |
+| `Personal/15 Tasks` | Task cards (`type: task`), flat; linked to a project via `project` |
+| `Personal/20 Projects/<Name>/` | Project folder + hub with the same name (`<Name>.md`), source notes, `Decision - …` notes |
+| `Personal/30 Research/<Name>/` | Research folder + hub, experiment files |
+| `Personal/40 Knowledge` | Evergreen concept notes (flat) |
+| `Personal/50 Ideas` | Ideas not yet started |
+| `Personal/60 Resources` | Reading lists, `Attachments/` |
+| `Personal/70 Analyses` | AI analysis output (`type: analysis`), weekly reviews |
+| `Personal/90 Archive` | Closed project/research folders (moved whole) |
 
-Maximum depth is `Category/Project/note`. Don't create new top-level folders; propose them instead.
+**Work/** (organized around projects, clients and meetings)
+| Folder | Contents |
+|---|---|
+| `Work/MOC - Work.md` | Entry map of the work area |
+| `Work/00 Inbox` | Raw work notes, pasted chats |
+| `Work/10 Projects/<Name>/` | Project hub (`<Name>.md`), design/source notes, `ADR-NNN - <short name>.md` decision records |
+| `Work/20 Meetings` | `type: meeting`; named `YYYY-MM-DD - Organization - Topic` (no date if unknown) |
+| `Work/30 Organizations & People` | `type: org` cards for clients, vendors and people |
+| `Work/40 Systems & APIs` | External systems, APIs, reusable technical knowledge (`type: resource`) |
+| `Work/50 Tasks` | Work task cards |
+| `Work/60 Attachments` · `Work/70 Analyses` · `Work/90 Archive` | Files · work analyses · closed projects |
+
+**99 System** (shared): Guide, Templates, `Index.md`, `Log.md`, `Health.md`, `AI Queue.md`, `config.json`, `scripts/`.
+
+Maximum depth is `Area/Category/Project/note`. Don't create new top-level folders; propose them instead.
 
 ## 2. Metadata schema
 | Field | Values |
 |---|---|
-| `type` | project · research · task · idea · knowledge · source · resource · moc · system · decision · analysis |
+| `type` | project · research · task · idea · knowledge · source · resource · moc · system · decision · analysis · meeting (work meeting) · org (organization/person card) |
 | `status` | task: todo · doing · done (board columns To Do / In Progress / Done; `backlog` and `blocked` are valid and show in an "Other" column) — project/research: active · paused · done · archived — knowledge: seed · evergreen — idea: idea · exploring · promoted · dropped — decision: proposed · accepted · rejected · superseded |
 | `project` | `"[[Hub]]"` for notes, tasks and decisions that belong to a project |
 | `topics` | list of `"[[MOC - …]]"` |
@@ -55,17 +72,20 @@ python "99 System/scripts/vault_tool.py" lint                     # writes Healt
 python "99 System/scripts/vault_tool.py" index                    # writes Index.md
 python "99 System/scripts/vault_tool.py" queue                    # AI queue
 python "99 System/scripts/vault_tool.py" log <op> "<text>"
-python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx/pdf/csv -> source note in 00 Inbox
+python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx/pdf/csv -> source note in the area's inbox
 ```
+All of them take `--scope personal|work|all` (import defaults to personal; `--scope work` → `Work/00 Inbox` + `Work/60 Attachments`). `Index.md` is split into Personal / Work / Shared sections.
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
-MCP server: `99 System/scripts/vault_mcp.py` (same rules; protected folders are invisible; it only creates new notes/tasks).
+MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scope`; protected folders are invisible; it only creates new notes/tasks, in the project's area).
 Retrieval order: `99 System/Index.md`, then `search`, then `Read` only the relevant line ranges. Don't read long source notes end to end.
 
 ## 4. Note types
 Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Status · Decisions (embedded Base) · Open questions · Tasks (sb-board) · Experiment log · Related.
-- **Task card** (`15 Tasks/<short title>.md`): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.
-- **Decision note** (`Decision - <short name>.md`, in the hub folder): `type: decision`, `project`, `status`, `origin`, `decided` (only if known); body: Decision · Rationale · Source · Alternatives.
-- **Analysis note** (`70 Analyses/<YYYY-MM-DD> - <title>.md`): `type: analysis`, `source` names the command that produced it; cite a `[[note]]` for every claim.
+- **Task card** (`Personal/15 Tasks/` or `Work/50 Tasks/<short title>.md`, by the project's area): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.
+- **Decision note** (Personal: `Decision - <short name>.md`; Work: `ADR-NNN - <short name>.md`; in the hub folder): `type: decision`, `project`, `status`, `origin`, `decided` (only if known); body: Decision · Rationale · Source · Alternatives.
+- **Analysis note** (`Personal/70 Analyses/` or `Work/70 Analyses/<YYYY-MM-DD> - <title>.md`): `type: analysis`, `source` names the command that produced it; cite a `[[note]]` for every claim.
+- **Meeting note** (Work): `type: meeting`, `project`; body: Notes · Decisions · Action items (action items can become task cards).
+- **Organization card** (Work): `type: org`; body: Role · Linked notes · People.
 - **Knowledge note**: created when a concept shows up in a second context; `status: seed`, at least 2 source links.
 
 ## 5. Commands

@@ -1,7 +1,7 @@
 {
   "newFileLocation": "folder",
-  "newFileFolderPath": "00 Inbox",
-  "attachmentFolderPath": "60 Resources/Attachments",
+  "newFileFolderPath": "Personal/00 Inbox",
+  "attachmentFolderPath": "Personal/60 Resources/Attachments",
   "alwaysUpdateLinks": true,
   "newLinkFormat": "shortest"
 }

@@ -10,8 +10,8 @@ Used by `vault_tool.py import <file>` and by the Second Brain Tools plugin.
 import csv, datetime, io, os, re, shutil, subprocess, zipfile
 import xml.etree.ElementTree as ET
 
-ATTACH = "60 Resources/Attachments"
-INBOX = "00 Inbox"
+ATTACH = "Personal/60 Resources/Attachments"  # defaults (Personal area)
+INBOX = "Personal/00 Inbox"
 SUPPORTED = {"docx", "xlsx", "pptx", "pdf", "csv"}
 MAX_ROWS = 500
 
@@ -237,7 +237,7 @@ def safe_name(s):
     return re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|#^\[\]]', " ", s)).strip()[:90] or "Import"
 
 
-def import_file(src, vault, protected):
+def import_file(src, vault, protected=(), inbox=INBOX, attach=ATTACH):
     """Returns dict(note, attachment, warning). Paths are vault-relative with '/'."""
     src_abs = os.path.abspath(src if os.path.isabs(src) else os.path.join(vault, src))
     if not os.path.isfile(src_abs):
@@ -252,15 +252,15 @@ def import_file(src, vault, protected):
     if ext not in SUPPORTED:
         raise ValueError(f"unsupported type: .{ext} (supported: {', '.join(sorted(SUPPORTED))})")
     if not inside:
-        os.makedirs(os.path.join(vault, ATTACH), exist_ok=True)
-        dest = _unique(os.path.join(vault, ATTACH, safe_name(os.path.splitext(os.path.basename(src_abs))[0]) + "." + ext))
+        os.makedirs(os.path.join(vault, attach), exist_ok=True)
+        dest = _unique(os.path.join(vault, attach, safe_name(os.path.splitext(os.path.basename(src_abs))[0]) + "." + ext))
         shutil.copy2(src_abs, dest)
         rel = os.path.relpath(dest, vault).replace("\\", "/")
         src_abs = dest
     body, warn = CONVERT[ext](src_abs)
     title = safe_name(os.path.splitext(os.path.basename(src_abs))[0])
-    os.makedirs(os.path.join(vault, INBOX), exist_ok=True)
-    note_abs = _unique(os.path.join(vault, INBOX, title + ".md"))
+    os.makedirs(os.path.join(vault, inbox), exist_ok=True)
+    note_abs = _unique(os.path.join(vault, inbox, title + ".md"))
     today = datetime.date.today().isoformat()
     kind = {"docx": "Word", "xlsx": "Excel", "pptx": "PowerPoint", "pdf": "PDF", "csv": "CSV"}[ext]
     lines = [

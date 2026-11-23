@@ -1,5 +1,5 @@
 {
   "deleteFileAfterConversion": false,
-  "attachmentsFolder": "custom",
-  "customAttachmentsFolder": "60 Resources/Attachments"
+  "attachmentsFolder": "subfolder",
+  "customAttachmentsFolder": "Attachments"
 }

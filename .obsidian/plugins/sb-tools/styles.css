@@ -61,3 +61,6 @@
 .sbt-sheet th { background: var(--background-secondary); color: var(--text-muted); font-weight: 500; position: sticky; top: 0; }
 .sbt-sheet tbody th { position: sticky; left: 0; }
 .sbt-error { color: var(--text-error); padding: 12px; }
+.sbt-heat-bar { margin-bottom: 6px; }
+.sbt-scope { font-size: var(--font-ui-smaller); }
+.sbt-qm-work .sbt-qm-sub::after { content: " · Work"; color: var(--color-orange); }

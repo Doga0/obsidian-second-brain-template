@@ -1,7 +1,7 @@
 ---
 name: sb-standup
 description: Second Brain — Progress report from the board: work completed and started recently, cards in progress and blocked, overdue and upcoming dates, progress per project, and a suggestion for today. Use when the user runs /sb-standup or asks "where do I stand?" or "what did I do this week?".
-argument-hint: [days, default 7] [--project <Hub>] [--save]
+argument-hint: [days, default 7] [--project <Hub>] [--save] [--scope personal|work|all]
 ---
 # /sb-standup
 
@@ -14,4 +14,4 @@ argument-hint: [days, default 7] [--project <Hub>] [--save]
    - **Project progress**: `done/total` and date of last movement; call out active projects with no movement for 14+ days
    - **Suggestion for today** (max 3 cards): based on priority, dates and how much is already in progress, with reasons, labelled *AI suggestion*
 3. Don't change any card's `status`. If the user asks, update cards with `/sb-task`.
-4. With `--save`, write `70 Analyses/<date> - Standup.md` (`type: analysis`, `source: /sb-standup`) and `log standup`.
+4. With `--save`, write `Personal/70 Analyses/` (work scope: `Work/70 Analyses/`) `<date> - Standup.md` (`type: analysis`, `source: /sb-standup`) and `log standup`.

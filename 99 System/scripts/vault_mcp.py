@@ -24,7 +24,26 @@ def _protected():
 
 PROTECTED = _protected()
 HIDDEN = tuple(PROTECTED) + (".obsidian/", ".git/", ".claude/", ".trash/", "99 System/.integrity/")
-INBOX, TASKS = "00 Inbox", "15 Tasks"
+AREAS = {"personal": "Personal", "work": "Work"}
+FOLDERS = {"personal": {"inbox": "Personal/00 Inbox", "tasks": "Personal/15 Tasks"},
+           "work": {"inbox": "Work/00 Inbox", "tasks": "Work/50 Tasks"}}
+
+
+def scope_of(a, default="all"):
+    v = str(a.get("scope", "") or "").strip().lower()
+    if not v:
+        return default
+    for names, val in ((("personal", "p"), "personal"), (("work", "w"), "work"), (("all", "both"), "all")):
+        if v in names:
+            return val
+    raise ValueError("scope must be personal, work or all")
+
+
+def area_of(rel):
+    for k, f in AREAS.items():
+        if rel == f or rel.startswith(f + "/"):
+            return k
+    return "shared"
 PROTOCOL = "2025-06-18"
 MAX_READ = 60000
 
@@ -68,7 +87,7 @@ def all_notes():
     return out
 
 
-def find(name):
+def find(name, scope="all"):
     name = str(name).strip()
     try:
         full, rel = safe_path(name)
@@ -78,7 +97,7 @@ def find(name):
         raise
     base = name.split("/")[-1]
     base = base[:-3] if base.endswith(".md") else base
-    hits = [n for n in all_notes() if os.path.basename(n)[:-3].lower() == base.lower()]
+    hits = [n for n in all_notes() if os.path.basename(n)[:-3].lower() == base.lower() and (scope == "all" or area_of(n) == scope)]
     if len(hits) == 1:
         return hits[0]
     if len(hits) > 1:
@@ -103,19 +122,25 @@ def log(op, msg):
 
 
 # ------------------------------------------------------------------ tools
-def t_index(_):
-    return open(os.path.join(VAULT, "99 System", "Index.md"), encoding="utf-8").read()[:MAX_READ]
+def t_index(a):
+    sc = scope_of(a)
+    text = open(os.path.join(VAULT, "99 System", "Index.md"), encoding="utf-8").read()
+    if sc != "all":
+        head = {"personal": "# Personal", "work": "# Work"}[sc]
+        parts = re.split(r"(?m)^(?=# )", text)
+        text = "".join(p for p in parts if p.startswith(head)) or f"(no notes in {sc})"
+    return text[:MAX_READ]
 
 
 def t_search(a):
     q = str(a.get("query", "")).strip()
     if not q:
         raise ValueError("query is required")
-    return run_tool("search", q, "--k", str(int(a.get("k", 10))))
+    return run_tool("search", q, "--k", str(int(a.get("k", 10))), "--scope", scope_of(a))
 
 
 def t_read(a):
-    rel = find(a.get("path") or a.get("note") or "")
+    rel = find(a.get("path") or a.get("note") or "", scope_of(a))
     lines = open(os.path.join(VAULT, rel), encoding="utf-8", errors="replace").read().splitlines()
     off = max(0, int(a.get("offset", 1)) - 1)
     lim = int(a.get("limit", 0)) or len(lines)
@@ -125,28 +150,44 @@ def t_read(a):
 
 
 def t_context(a):
-    return run_tool("context", find(a.get("note", ""))[:-3].split("/")[-1])
+    return run_tool("context", find(a.get("note", ""), scope_of(a))[:-3].split("/")[-1])
 
 
 def t_tasks(a):
-    args = ["tasks", "--json"]
+    args = ["tasks", "--json", "--scope", scope_of(a)]
     if a.get("project"):
-        args[1:1] = ["--project", str(a["project"])]
+        args += ["--project", str(a["project"])]
     return run_tool(*args)
 
 
 def t_list(a):
+    sc = scope_of(a)
     folder = str(a.get("folder", "")).strip().strip("/")
     if folder and blocked(folder + "/"):
         raise PermissionError("this folder is not accessible")
-    notes = [n for n in all_notes() if not folder or n.startswith(folder + "/")]
+    notes = [n for n in all_notes() if (not folder or n.startswith(folder + "/")) and (sc == "all" or area_of(n) == sc)]
     return "\n".join(notes[:2000]) or "(empty)"
+
+
+def write_area(a):
+    """Area for create tools: explicit scope, else the project's hub location, else personal."""
+    sc = scope_of(a, default="")
+    if sc in FOLDERS:
+        return sc
+    if sc == "all" and str(a.get("scope", "")).strip():
+        raise ValueError("for writing, scope must be personal or work")
+    if a.get("project"):
+        hub = clean_name(a["project"])
+        for n in all_notes():
+            if os.path.basename(n)[:-3] == hub and area_of(n) in FOLDERS:
+                return area_of(n)
+    return "personal"
 
 
 def t_capture(a):
     title = clean_name(a.get("title", "")) or "Captured note"
     content = str(a.get("content", "")).rstrip()
-    p = unique(INBOX, title)
+    p = unique(FOLDERS[write_area(a)]["inbox"], title)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     today = datetime.date.today().isoformat()
     src = str(a.get("source", "")).replace('"', "'").strip()
@@ -176,7 +217,7 @@ def t_task(a):
     fm += [f"created: {datetime.date.today().isoformat()}", "---"]
     subs = [f"- [ ] {s}" for s in a.get("subtasks", []) or []] or ["- [ ] "]
     body = [f"# {title}", "", "## Description", str(a.get("description", "")).strip(), "", "## Subtasks", *subs, "", "## Notes", ""]
-    p = unique(TASKS, title)
+    p = unique(FOLDERS[write_area(a)]["tasks"], title)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(fm + body))
@@ -185,17 +226,19 @@ def t_task(a):
     return f"created: {rel}"
 
 
-S = lambda props, req=(): {"type": "object", "properties": props, "required": list(req)}
 STR, INT = {"type": "string"}, {"type": "integer"}
+SCOPE_PROP = {"type": "string", "enum": ["personal", "work", "all"],
+              "description": "Area: personal (Personal/), work (Work/) or all. Reads default to all."}
+S = lambda props, req=(): {"type": "object", "properties": dict(props, scope=SCOPE_PROP), "required": list(req)}
 TOOLS = {
-    "vault_index": (t_index, "Returns the vault catalog (99 System/Index.md): type, status and summary of every note. Read this first.", S({}), True),
-    "vault_search": (t_search, "Ranked keyword search over note sections (accent-insensitive). Returns file paths and line numbers.", S({"query": STR, "k": INT}, ["query"]), True),
+    "vault_index": (t_index, "Returns the vault catalog (99 System/Index.md): type, status and summary of every note; scope narrows it to the Personal or Work section. Read this first.", S({}), True),
+    "vault_search": (t_search, "Ranked keyword search over note sections (accent-insensitive), limited by scope. Returns file paths and line numbers.", S({"query": STR, "k": INT}, ["query"]), True),
     "vault_read_note": (t_read, "Reads a note with line numbers. path: vault-relative path or note name. Use offset/limit to read a section.", S({"path": STR, "offset": INT, "limit": INT}, ["path"]), True),
     "vault_note_context": (t_context, "Frontmatter, heading outline, outgoing links and backlinks of a note.", S({"note": STR}, ["note"]), True),
-    "vault_list_tasks": (t_tasks, "Board task cards (JSON): status, priority, dates, project. Filter with project.", S({"project": STR}), True),
-    "vault_list_notes": (t_list, "List of note files; narrow it to a folder with folder.", S({"folder": STR}), True),
-    "vault_capture": (t_capture, "Writes a NEW note to 00 Inbox (never changes an existing note). For capturing an idea or text the user asked for.", S({"title": STR, "content": STR, "source": STR}, ["title", "content"]), False),
-    "vault_create_task": (t_task, "Writes a NEW task card to 15 Tasks (status: todo). priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
+    "vault_list_tasks": (t_tasks, "Board task cards (JSON): area, status, priority, dates, project. Filter with project and scope.", S({"project": STR}), True),
+    "vault_list_notes": (t_list, "List of note files; narrow it with folder and scope.", S({"folder": STR}), True),
+    "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox.", S({"title": STR, "content": STR, "source": STR}, ["title", "content"]), False),
+    "vault_create_task": (t_task, "Writes a NEW task card (status: todo) to Work/50 Tasks or Personal/15 Tasks: by scope, else the project's area, else personal. priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
 }
 
 
@@ -205,7 +248,7 @@ def handle(msg):
         ver = (msg.get("params") or {}).get("protocolVersion") or PROTOCOL
         return {"protocolVersion": ver, "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": "second-brain", "version": "1.0.0"},
-                "instructions": "A personal Obsidian vault. Start with vault_index, then vault_search and vault_read_note. "
+                "instructions": "An Obsidian vault with two areas, Personal/ and Work/ (scope: personal | work | all). Start with vault_index, then vault_search and vault_read_note. "
                                 "Write tools only create new notes/tasks; do not write unless the user asks."}
     if method == "ping":
         return {}

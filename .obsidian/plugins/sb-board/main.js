@@ -10,7 +10,9 @@
  * wip: doing=3              # optional: WIP limits, comma separated
  * title: Tasks              # optional
  * filters: true             # optional: show filter bar (default true)
+ * scope: work               # optional: personal | work | all (default all; the filter bar can switch)
  * ```
+ * The vault has two areas, Personal/ and Work/. New cards go to the area of their project.
  * Folders listed under "protected" in `99 System/config.json` are never read or written.
  */
 'use strict';
@@ -19,8 +21,19 @@ const { Plugin, MarkdownRenderChild, Modal, Notice, Menu, Setting, TFile, normal
 
 const CONFIG_PATH = '99 System/config.json';
 const TEMPLATES = '99 System/Templates/';
-const TASKS_FOLDER = '15 Tasks';
-const IDEAS_FOLDER = '50 Ideas';
+const AREAS = {
+  personal: { root: 'Personal', label: 'Personal', tasks: 'Personal/15 Tasks', ideas: 'Personal/50 Ideas' },
+  work: { root: 'Work', label: 'Work', tasks: 'Work/50 Tasks', ideas: 'Work/00 Inbox' },
+};
+const SCOPE_ALIASES = { personal: 'personal', p: 'personal', work: 'work', w: 'work', all: '', both: '', '': '' };
+function areaOf(path) {
+  for (const [k, a] of Object.entries(AREAS)) if (path === a.root || path.startsWith(a.root + '/')) return k;
+  return '';
+}
+function parseScope(v) {
+  const k = String(v || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SCOPE_ALIASES, k) ? SCOPE_ALIASES[k] : '';
+}
 const BOARD_NOTE = 'Board.md';
 
 const DEFAULT_COLUMNS = {
@@ -102,6 +115,7 @@ function parseConfig(src) {
     wip: parseWip(cfg.wip),
     title: cfg.title || '',
     filters: cfg.filters === undefined ? true : !/^(false|no|0)$/i.test(cfg.filters),
+    scope: parseScope(cfg.scope),
   };
 }
 function cardSort(a, b) {
@@ -123,7 +137,7 @@ class NewCardModal extends Modal {
     super(app);
     this.opts = opts;
     this.onSubmit = onSubmit;
-    this.values = { title: '', priority: opts.priority || '', due: '', project: opts.project || '', status: opts.status };
+    this.values = { title: '', priority: opts.priority || '', due: '', project: opts.project || '', status: opts.status, area: opts.area || '' };
   }
   onOpen() {
     const { contentEl } = this;
@@ -150,6 +164,11 @@ class NewCardModal extends Modal {
         t.onChange((v) => (this.values.due = v));
       });
     }
+    new Setting(contentEl).setName('Area').setDesc("When a project is selected, the project's area is used").addDropdown((d) => {
+      d.addOption('', 'Automatic');
+      for (const [k, a] of Object.entries(AREAS)) d.addOption(k, a.label);
+      d.setValue(this.values.area).onChange((v) => (this.values.area = v));
+    });
     new Setting(contentEl).setName('Column').addDropdown((d) => {
       for (const c of this.opts.columns) d.addOption(c, LABELS[c] || c);
       d.setValue(this.values.status).onChange((v) => (this.values.status = v));
@@ -172,7 +191,7 @@ class BoardChild extends MarkdownRenderChild {
     this.app = plugin.app;
     this.cfg = cfg;
     this.sourcePath = sourcePath;
-    this.state = { project: cfg.project || '', priority: '', q: '', soon: false };
+    this.state = { project: cfg.project || '', priority: '', q: '', soon: false, scope: cfg.scope || '' };
     this.timer = null;
   }
   onload() {
@@ -200,7 +219,7 @@ class BoardChild extends MarkdownRenderChild {
       const cache = this.app.metadataCache.getFileCache(f);
       const fm = (cache && cache.frontmatter) || {};
       const type = String(fm.type || '').toLowerCase();
-      if (type === 'project' || type === 'research') projects.add(f.basename);
+      if ((type === 'project' || type === 'research') && (!this.state.scope || areaOf(f.path) === this.state.scope)) projects.add(f.basename);
       if (type === 'task') {
         const pn = linkName(fm.project);
         if (pn) {
@@ -238,6 +257,7 @@ class BoardChild extends MarkdownRenderChild {
 
   passes(card) {
     const s = this.state, t = today();
+    if (s.scope && areaOf(card.file.path) !== s.scope) return false;
     if (s.project && card.type !== 'project' && card.type !== 'research' && card.project !== s.project) return false;
     if (s.priority && card.priority !== s.priority) return false;
     if (s.q && !card.title.toLowerCase().includes(s.q.toLowerCase()) && !card.project.toLowerCase().includes(s.q.toLowerCase())) return false;
@@ -309,6 +329,13 @@ class BoardChild extends MarkdownRenderChild {
 
   renderFilters(head, projects) {
     const bar = head.createDiv({ cls: 'sb-filters' });
+    if (!this.cfg.scope) {
+      const sc = bar.createEl('select', { cls: 'dropdown' });
+      sc.createEl('option', { text: 'All areas', value: '' });
+      for (const [k, a] of Object.entries(AREAS)) sc.createEl('option', { text: a.label, value: k });
+      sc.value = this.state.scope;
+      sc.onchange = () => { this.state.scope = sc.value; this.state.project = this.cfg.project || ''; this.render(); };
+    }
     if (!this.cfg.project && this.cfg.primary !== 'project' && this.cfg.primary !== 'research') {
       const sel = bar.createEl('select', { cls: 'dropdown' });
       sel.createEl('option', { text: 'All projects', value: '' });
@@ -350,6 +377,7 @@ class BoardChild extends MarkdownRenderChild {
       }
     }
     if (c.project && !this.cfg.project && c.type !== 'project') meta.createSpan({ cls: 'sb-badge sb-proj', text: c.project });
+    if (!this.state.scope && areaOf(c.file.path) === 'work') meta.createSpan({ cls: 'sb-badge sb-area', text: 'Work' });
     if (c.subTotal) meta.createSpan({ cls: 'sb-badge', text: `☑ ${c.subDone}/${c.subTotal}` });
     if (c.origin === 'ai-suggestion') meta.createSpan({ cls: 'sb-badge sb-ai', text: 'AI suggestion' });
     if (c.ai) meta.createSpan({ cls: 'sb-badge sb-ai', text: '🤖 ' + c.ai });
@@ -412,7 +440,7 @@ class BoardChild extends MarkdownRenderChild {
     const { projects } = this.collect();
     new NewCardModal(this.app, {
       type: this.cfg.primary, columns: this.cfg.columns, status: col,
-      project: this.cfg.project || this.state.project || '', projects,
+      project: this.cfg.project || this.state.project || '', projects, area: this.state.scope || '',
       heading: this.cfg.primary === 'idea' ? 'New idea' : 'New task',
     }, (v) => this.plugin.createCard(this.cfg.primary, v)).open();
   }
@@ -464,13 +492,14 @@ class SbBoardPlugin extends Plugin {
   quickAdd(type) {
     let project = '';
     const active = this.app.workspace.getActiveFile();
+    const area = active ? areaOf(active.path) : '';
     if (active && !this.isProtected(active.path)) {
       const fm = (this.app.metadataCache.getFileCache(active) || {}).frontmatter || {};
       if (fm.type === 'project' || fm.type === 'research') project = active.basename;
       else if (fm.project) project = linkName(fm.project);
     }
     new NewCardModal(this.app, {
-      type, columns: DEFAULT_COLUMNS[type], status: type === 'task' ? 'todo' : 'idea', project, projects: this.activeProjects(),
+      type, columns: DEFAULT_COLUMNS[type], status: type === 'task' ? 'todo' : 'idea', project, projects: this.activeProjects(), area,
       heading: type === 'task' ? 'Quick task' : 'Quick idea',
     }, (v) => this.createCard(type, v)).open();
   }
@@ -498,9 +527,20 @@ class SbBoardPlugin extends Plugin {
     });
   }
 
+  projectArea(name) {
+    if (!name) return '';
+    for (const f of this.app.vault.getMarkdownFiles()) {
+      if (f.basename !== name || f.path.startsWith(TEMPLATES)) continue;
+      const fm = (this.app.metadataCache.getFileCache(f) || {}).frontmatter || {};
+      if (fm.type === 'project' || fm.type === 'research') return areaOf(f.path);
+    }
+    return '';
+  }
+
   async createCard(type, v) {
-    const folder = type === 'idea' ? IDEAS_FOLDER : TASKS_FOLDER;
-    if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder);
+    const area = this.projectArea(v.project) || v.area || 'personal';
+    const folder = type === 'idea' ? AREAS[area].ideas : AREAS[area].tasks;
+    if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder).catch(() => {});
     const base = sanitizeName(v.title) || 'New card';
     let path = normalizePath(`${folder}/${base}.md`);
     let n = 2;
@@ -520,5 +560,5 @@ class SbBoardPlugin extends Plugin {
   }
 }
 
-SbBoardPlugin._test = { parseConfig, linkName, dateStr, sanitizeName, cardSort, daysBetween, parseWip, asList, makeProtectedTest };
+SbBoardPlugin._test = { areaOf, parseScope, AREAS, parseConfig, linkName, dateStr, sanitizeName, cardSort, daysBetween, parseWip, asList, makeProtectedTest };
 module.exports = SbBoardPlugin;

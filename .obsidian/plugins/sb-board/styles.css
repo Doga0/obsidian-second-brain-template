@@ -45,3 +45,4 @@
 .sb-badge.sb-muted { opacity: .7; }
 .sb-progress { height: 5px; background: var(--background-modifier-hover); border-radius: 3px; margin-top: 7px; overflow: hidden; }
 .sb-progress-bar { height: 100%; background: var(--color-green); }
+.sb-badge.sb-area { color: var(--color-orange); border-color: rgba(var(--color-orange-rgb), 0.4); }

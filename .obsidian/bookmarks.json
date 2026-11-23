@@ -33,7 +33,20 @@
     {
       "type": "folder",
       "ctime": 1767225600000,
-      "path": "00 Inbox"
+      "path": "Personal/00 Inbox",
+      "title": "Personal Inbox"
+    },
+    {
+      "type": "folder",
+      "ctime": 1767225600000,
+      "path": "Work/00 Inbox",
+      "title": "Work Inbox"
+    },
+    {
+      "type": "file",
+      "ctime": 1767225600000,
+      "path": "Work/MOC - Work.md",
+      "title": "Work"
     }
   ]
 }

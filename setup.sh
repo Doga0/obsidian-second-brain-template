@@ -54,7 +54,9 @@ fi
 
 # ------------------------------------------------------------------ 2. folders
 step "Folders"
-for d in "00 Inbox" "15 Tasks" "60 Resources/Attachments" "70 Analyses" "90 Archive"; do
+for d in "Personal/00 Inbox" "Personal/15 Tasks" "Personal/60 Resources/Attachments" "Personal/70 Analyses" "Personal/90 Archive" \
+         "Work/00 Inbox" "Work/10 Projects" "Work/20 Meetings" "Work/30 Organizations & People" "Work/40 Systems & APIs" \
+         "Work/50 Tasks" "Work/60 Attachments" "Work/70 Analyses" "Work/90 Archive"; do
   [ -d "$d" ] || { mkdir -p "$d"; ok "created: $d"; }
 done
 ok "Folder structure complete"

@@ -4,18 +4,19 @@ type: system
 # Home
 
 > [!tip] How it works
-> **Obsidian is the interface, Claude Code is the engine.** You write, read and approve here; analysis and reorganization happen in Claude Code through `/sb-…` commands. New note: `Ctrl/Cmd+N` lands in the Inbox. Leave work for the AI: [[AI Queue]], or add a property like `ai: challenge` to a note.
+> **Obsidian is the interface, Claude Code is the engine.** You write, read and approve here; analysis and reorganization happen in Claude Code through `/sb-…` commands. New note: `Ctrl/Cmd+N` lands in the Personal Inbox; for a work note use `Ctrl/Cmd+O` → `+ title` → *Work*. Leave work for the AI: [[AI Queue]], or add a property like `ai: challenge` to a note.
 >
 > **First time here?** Read the [[Second Brain Guide]]. The notes marked *example* show how everything fits together; delete them all with `python "99 System/scripts/vault_tool.py" clean-examples --yes`.
 
-**Board:** [[Board]] · **Health:** [[Health]] · **Catalog:** [[Index]] · **History:** [[Log]]
+> **Two areas:** `Personal/` and `Work/`. Boards, calendar, heatmap and AI commands show both or just one (the *area* menu in Obsidian, `--scope work` in commands).
+
+**Board:** [[Board]] · **Work:** [[MOC - Work]] · **Health:** [[Health]] · **Catalog:** [[Index]] · **History:** [[Log]]
 
 ## Currently working on
-*Full board, projects and idea pipeline: [[Board]]. One menu for everything: `Ctrl/Cmd+O` (open a note, `!` new task, `+` new note, `>` commands).*
+*Full board, projects and idea pipeline: [[Board]]. One menu for everything: `Ctrl/Cmd+O` (open a note, `!` new task, `+` new note, `>` commands). Work cards carry an orange **Work** badge; pick an area in the menu above the board.*
 ```sb-board
 type: task
 hide-done-after: 7
-filters: false
 ```
 
 ## Activity
@@ -142,12 +143,12 @@ views:
 Free-form requests: [[AI Queue]]
 
 ## Inbox
-[[README - Inbox|How to process the Inbox]] · or `/sb-inbox`
+[[README - Inbox|How to process the Inbox]] · or `/sb-inbox` (work only: `/sb-inbox --scope work`)
 ```base
 filters:
   and:
-    - 'file.inFolder("00 Inbox")'
-    - 'file.name != "README - Inbox"'
+    - 'file.inFolder("Personal/00 Inbox") || file.inFolder("Work/00 Inbox")'
+    - '!file.name.startsWith("README")'
 views:
   - type: table
     name: Inbox
@@ -196,4 +197,4 @@ views:
 ```
 
 ## More
-[[Reading List]] · [[README - Ideas|Ideas]] · [[README - Archive|Archive]] · [[Second Brain Guide]] · Templates: `99 System/Templates`
+[[MOC - Work]] · [[Reading List]] · [[README - Ideas|Ideas]] · [[README - Archive|Archive]] · [[Second Brain Guide]] · Templates: `99 System/Templates`

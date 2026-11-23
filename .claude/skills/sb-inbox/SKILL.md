@@ -1,11 +1,11 @@
 ---
 name: sb-inbox
-description: Second Brain — Classify and process every note waiting in 00 Inbox with a single approval table. Use when the user runs /sb-inbox or asks to "empty / process the inbox".
-argument-hint: [--yes]
+description: Second Brain — Classify and process every note waiting in the inboxes (Personal/00 Inbox, Work/00 Inbox) with a single approval table. Use when the user runs /sb-inbox or asks to "empty / process the inbox".
+argument-hint: [--yes] [--scope personal|work|all]
 ---
 # /sb-inbox
 
-1. List the notes in `00 Inbox/` (skip `README - Inbox`). If it's empty, say so and stop.
+1. List the notes in both inboxes, or only `Work/00 Inbox/` with `--scope work`, only `Personal/00 Inbox/` with `--scope personal` (skip README notes). If empty, say so and stop. Each note stays in its own area: work inbox notes go to Work folders, personal ones to Personal folders; suggest moving between areas only if the user asks.
 2. For each note, do steps 1–3 of `/sb-ingest`. Keep it brief: for long notes use the title, the first sections and `context`.
 3. Show one table:
    | # | Note | Proposal: type → target | Links (with reasons) | Action |

@@ -8,42 +8,49 @@
   "collapse-color-groups": false,
   "colorGroups": [
     {
-      "query": "path:\"10 Maps\"",
+      "query": "path:\"Personal/10 Maps\"",
       "color": {
         "a": 1,
         "rgb": 15026253
       }
     },
     {
-      "query": "path:\"20 Projects\"",
+      "query": "path:\"Personal/20 Projects\"",
       "color": {
         "a": 1,
         "rgb": 4088797
       }
     },
     {
-      "query": "path:\"30 Research\"",
+      "query": "path:\"Personal/30 Research\"",
       "color": {
         "a": 1,
         "rgb": 9326278
       }
     },
     {
-      "query": "path:\"40 Knowledge\"",
+      "query": "path:\"Personal/40 Knowledge\"",
       "color": {
         "a": 1,
         "rgb": 3187820
       }
     },
     {
-      "query": "path:\"50 Ideas\"",
+      "query": "path:\"Personal/50 Ideas\"",
       "color": {
         "a": 1,
         "rgb": 16098596
       }
     },
     {
-      "query": "path:\"15 Tasks\"",
+      "query": "path:\"Personal/15 Tasks\"",
+      "color": {
+        "a": 1,
+        "rgb": 9145752
+      }
+    },
+    {
+      "query": "path:\"Work\"",
       "color": {
         "a": 1,
         "rgb": 9145752

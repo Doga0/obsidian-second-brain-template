@@ -15,4 +15,4 @@ argument-hint: <note | idea text> [--save]
    - **Cheapest falsification test**: a check doable in a day or one experiment
    - **The question nobody asked**
    Be tough but fair. Don't soften it with praise, and don't invent risks either.
-4. On request, add the open questions to the hub's "Open questions" section; with `--save`, save `70 Analyses/<date> - Challenge - <topic>.md`. Then `log challenge "<topic>"`.
+4. On request, add the open questions to the hub's "Open questions" section; with `--save`, save to `Personal/70 Analyses/` (work scope: `Work/70 Analyses/`) `<date> - Challenge - <topic>.md`. Then `log challenge "<topic>"`.

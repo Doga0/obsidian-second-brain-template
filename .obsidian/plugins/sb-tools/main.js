@@ -2,23 +2,44 @@
  * spreadsheet viewer (xlsx/csv) and file import for this vault.
  *
  *   ```sb-calendar            ```sb-heatmap
- *   project: MyHub     # opt    weeks: 52         # opt
+ *   project: MyHub    # opt    weeks: 52         # opt
  *   show: completed, due, started, decided      source: tasks, notes, git   # opt
+ *   scope: work      # opt    scope: personal   # opt (personal | work | all)
  *   ```                       ```
  *
- * Folders listed under "protected" in 99 System/config.json are left out of the calendar,
- * heatmap, reminders and import; the quick menu lists every file for navigation only.
+ * The vault has two areas, Personal/ and Work/; calendar, heatmap, reminders and the quick menu
+ * can be limited to one of them. 99 System/ and protected folders (99 System/config.json) are never counted.
  */
 'use strict';
 const obsidian = require('obsidian');
 const { Plugin, MarkdownRenderChild, Modal, Notice, SuggestModal, FileView, PluginSettingTab, Setting, TFile, normalizePath, prepareFuzzySearch } = obsidian;
 
+const SYSTEM = '99 System/';
+const AREAS = {
+  personal: { root: 'Personal', label: 'Personal', inbox: 'Personal/00 Inbox', attach: 'Personal/60 Resources/Attachments', tasks: 'Personal/15 Tasks', ideas: 'Personal/50 Ideas' },
+  work: { root: 'Work', label: 'Work', inbox: 'Work/00 Inbox', attach: 'Work/60 Attachments', tasks: 'Work/50 Tasks', ideas: 'Work/00 Inbox' },
+};
+const SCOPE_ALIASES = { personal: 'personal', p: 'personal', work: 'work', w: 'work', all: '', both: '', '': '' };
 const CONFIG_PATH = '99 System/config.json';
 let PROTECTED_DIRS = [];
 function isProtected(path) { return PROTECTED_DIRS.some((d) => path === d || path.startsWith(d + '/')); }
-const SYSTEM = '99 System/';
-const INBOX = '00 Inbox';
-const ATTACH = '60 Resources/Attachments';
+function areaOf(path) {
+  for (const [k, a] of Object.entries(AREAS)) if (path === a.root || path.startsWith(a.root + '/')) return k;
+  return '';
+}
+function parseScope(v) {
+  const k = String(v || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SCOPE_ALIASES, k) ? SCOPE_ALIASES[k] : '';
+}
+function inScope(path, scope) { return !scope || areaOf(path) === scope; }
+function scopeSelect(parent, value, onChange) {
+  const sel = parent.createEl('select', { cls: 'dropdown sbt-scope' });
+  sel.createEl('option', { text: 'All areas', value: '' });
+  for (const [k, a] of Object.entries(AREAS)) sel.createEl('option', { text: a.label, value: k });
+  sel.value = value || '';
+  sel.onchange = () => onChange(sel.value);
+  return sel;
+}
 const TOOL = '99 System/scripts/vault_tool.py';
 const VIEW_SHEET = 'sb-sheet-view';
 const DONE = new Set(['done', 'archived', 'dropped', 'rejected', 'superseded']);
@@ -30,7 +51,7 @@ const KIND = {
   started: { icon: '▶', label: 'Started' },
   decided: { icon: '⚖', label: 'Decision' },
 };
-const DEFAULTS = { remind: true, systemNotify: true, daysAhead: 1, intervalMin: 30 };
+const DEFAULTS = { remind: true, systemNotify: true, daysAhead: 1, intervalMin: 30, remindScope: '' };
 
 // ---------------------------------------------------------------- pure helpers
 const pad = (n) => String(n).padStart(2, '0');
@@ -65,14 +86,14 @@ function parseConfig(src) {
   return cfg;
 }
 function sanitizeName(s) { return String(s).replace(/[\\/:*?"<>|#^\[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 90); }
-function analysable(path) { return !isProtected(path) && !path.startsWith(SYSTEM); }
+function analysable(path, scope) { return !path.startsWith(SYSTEM) && !isProtected(path) && inScope(path, scope); }
 
 /** Group task/decision dates by day. items: [{date, kind, file, title, status, project}] */
 function collectDated(app, opts = {}) {
   const kinds = opts.kinds || Object.keys(KIND);
   const out = [];
   for (const f of app.vault.getMarkdownFiles()) {
-    if (!analysable(f.path)) continue;
+    if (!analysable(f.path, opts.scope)) continue;
     const fm = (app.metadataCache.getFileCache(f) || {}).frontmatter;
     if (!fm) continue;
     const type = String(fm.type || '');
@@ -91,7 +112,7 @@ function collectDated(app, opts = {}) {
 }
 
 /** Activity counts per day. Returns {map: {date: {tasks, notes, git, total}}} */
-function activityFromVault(app, sources, since) {
+function activityFromVault(app, sources, since, scope) {
   const map = {};
   const bump = (d, key, n = 1) => {
     if (!d || d < since) return;
@@ -99,7 +120,7 @@ function activityFromVault(app, sources, since) {
     e[key] += n; e.total += n;
   };
   for (const f of app.vault.getMarkdownFiles()) {
-    if (!analysable(f.path)) continue;
+    if (!analysable(f.path, scope)) continue;
     const fm = ((app.metadataCache.getFileCache(f) || {}).frontmatter) || {};
     if (sources.includes('tasks') && fm.type === 'task') {
       bump(dateStr(fm.completed), 'tasks');
@@ -219,6 +240,8 @@ class CalendarChild extends MarkdownRenderChild {
     super(el);
     this.plugin = plugin; this.app = plugin.app;
     this.project = cfg.project ? linkName(cfg.project) : '';
+    this.scope = parseScope(cfg.scope);
+    this.fixedScope = !!this.scope;
     this.kinds = asList(cfg.show).filter((k) => KIND[k]);
     if (!this.kinds.length) this.kinds = Object.keys(KIND);
     const now = new Date();
@@ -236,7 +259,7 @@ class CalendarChild extends MarkdownRenderChild {
   render() {
     const el = this.containerEl;
     el.empty(); el.addClass('sbt-cal');
-    const items = collectDated(this.app, { project: this.project, kinds: this.kinds });
+    const items = collectDated(this.app, { project: this.project, kinds: this.kinds, scope: this.scope });
     const byDay = {};
     for (const it of items) (byDay[it.date] = byDay[it.date] || []).push(it);
 
@@ -246,6 +269,7 @@ class CalendarChild extends MarkdownRenderChild {
     head.createDiv({ cls: 'sbt-cal-title', text: `${MONTHS[this.m]} ${this.y}` + (this.project ? ` · ${this.project}` : '') });
     head.createEl('button', { text: '›', cls: 'clickable-icon' }).onclick = () => nav(1);
     head.createEl('button', { text: 'Today', cls: 'sbt-today-btn' }).onclick = () => { const n = new Date(); this.y = n.getFullYear(); this.m = n.getMonth(); this.render(); };
+    if (!this.fixedScope && !this.project) scopeSelect(head, this.scope, (v) => { this.scope = v; this.render(); });
     const legend = head.createDiv({ cls: 'sbt-legend' });
     for (const k of this.kinds) legend.createSpan({ cls: `sbt-chip sbt-${k}`, text: `${KIND[k].icon} ${KIND[k].label}` });
 
@@ -297,6 +321,8 @@ class HeatmapChild extends MarkdownRenderChild {
     this.plugin = plugin; this.app = plugin.app;
     this.weeks = Math.min(104, Math.max(4, parseInt(cfg.weeks, 10) || 52));
     this.sources = asList(cfg.source || 'tasks, notes, git').map((s) => s.toLowerCase());
+    this.scope = parseScope(cfg.scope);
+    this.fixedScope = !!this.scope;
     this.timer = null;
   }
   onload() {
@@ -310,9 +336,9 @@ class HeatmapChild extends MarkdownRenderChild {
     const endD = new Date(end + 'T00:00:00');
     const startD = new Date(endD); startD.setDate(startD.getDate() - (this.weeks * 7 - 1) - ((endD.getDay() + 6) % 7));
     const since = ymd(startD);
-    const map = activityFromVault(this.app, this.sources, since);
+    const map = activityFromVault(this.app, this.sources, since, this.scope);
     if (this.sources.includes('git')) {
-      const commits = await this.plugin.gitDays(since);
+      const commits = await this.plugin.gitDays(since, this.scope);
       for (const [d, n] of Object.entries(commits)) {
         const e = (map[d] = map[d] || { tasks: 0, notes: 0, git: 0, total: 0 });
         e.git += n; e.total += n;
@@ -324,6 +350,10 @@ class HeatmapChild extends MarkdownRenderChild {
     const total = Object.values(map).reduce((s, x) => s + x.total, 0);
     const activeDays = Object.values(map).filter((x) => x.total > 0).length;
     const st = streaks(map, end);
+    if (!this.fixedScope) {
+      const bar = el.createDiv({ cls: 'sbt-heat-bar' });
+      scopeSelect(bar, this.scope, (v) => { this.scope = v; this.render(); });
+    }
     const stats = el.createDiv({ cls: 'sbt-heat-stats' });
     const stat = (n, l) => { const s = stats.createDiv({ cls: 'sbt-stat' }); s.createDiv({ cls: 'sbt-stat-n', text: String(n) }); s.createDiv({ cls: 'sbt-stat-l', text: l }); };
     stat(total, `activities (${this.weeks} weeks)`); stat(activeDays, 'active days'); stat(st.cur, 'current streak'); stat(st.best, 'longest streak');
@@ -352,7 +382,7 @@ class HeatmapChild extends MarkdownRenderChild {
         const parts = e ? [e.tasks && `${e.tasks} task`, e.notes && `${e.notes} note`, e.git && `${e.git} commit`].filter(Boolean).join(', ') : '';
         c.setAttr('title', `${d}: ${n ? parts : 'no activity'}`);
         const day = d;
-        c.onclick = () => this.plugin.openDay(day);
+        c.onclick = () => this.plugin.openDay(day, this.scope);
         d = addDays(d, 1);
       }
       col += 1;
@@ -389,20 +419,26 @@ class QuickMenu extends SuggestModal {
         .filter((x) => x.m).sort((a, b) => b.m.score - a.m.score).slice(0, 60)
         .map((x) => ({ kind: 'command', title: x.c.name, command: x.c }));
     }
+    const act = app.workspace.getActiveFile();
+    const primary = (act && areaOf(act.path)) || 'personal';
+    const other = primary === 'work' ? 'personal' : 'work';
     const create = { '+': 'note', '!': 'task', '?': 'idea' }[q[0]];
     if (create) {
       const title = q.slice(1).trim();
-      return [{ kind: 'create', what: create, title }];
+      return [{ kind: 'create', what: create, title, area: primary }, { kind: 'create', what: create, title, area: other }];
     }
     const out = [];
     if (q) {
-      out.push({ kind: 'create', what: 'note', title: q }, { kind: 'create', what: 'task', title: q });
+      out.push({ kind: 'create', what: 'note', title: q, area: primary }, { kind: 'create', what: 'task', title: q, area: primary },
+        { kind: 'create', what: 'note', title: q, area: other }, { kind: 'create', what: 'task', title: q, area: other });
     }
     const files = app.vault.getFiles().filter((f) => !f.path.startsWith('.'));
     if (!q) {
       const recent = app.workspace.getLastOpenFiles().map((p) => app.vault.getAbstractFileByPath(p)).filter((f) => f instanceof TFile);
       return recent.map((file) => ({ kind: 'file', file, title: file.basename })).concat([
-        { kind: 'create', what: 'task', title: '' }, { kind: 'create', what: 'note', title: '' }, { kind: 'create', what: 'idea', title: '' },
+        { kind: 'create', what: 'task', title: '', area: primary }, { kind: 'create', what: 'note', title: '', area: primary },
+        { kind: 'create', what: 'task', title: '', area: other }, { kind: 'create', what: 'note', title: '', area: other },
+        { kind: 'create', what: 'idea', title: '', area: 'personal' },
         { kind: 'open', path: 'Board.md', title: 'Board' }, { kind: 'open', path: 'Home.md', title: 'Home' },
       ]);
     }
@@ -427,11 +463,13 @@ class QuickMenu extends SuggestModal {
     const body = el.createDiv({ cls: 'sbt-qm-body' });
     if (item.kind === 'create') {
       const label = { note: 'New note', task: 'New task', idea: 'New idea' }[item.what];
-      body.createDiv({ text: item.title ? `${label}: ${item.title}` : `${label}…` });
-      body.createDiv({ cls: 'sbt-qm-sub', text: { note: INBOX, task: '15 Tasks · board', idea: '50 Ideas · board' }[item.what] });
+      const ar = AREAS[item.area || 'personal'];
+      body.createDiv({ text: (item.title ? `${label}: ${item.title}` : `${label}…`) + ` · ${ar.label}` });
+      body.createDiv({ cls: 'sbt-qm-sub', text: { note: ar.inbox, task: ar.tasks + ' · board', idea: ar.ideas + ' · board' }[item.what] });
     } else if (item.kind === 'file') {
       body.createDiv({ text: item.title + (item.alias ? `  ← ${item.alias}` : '') });
       const sub = item.file.parent && item.file.parent.path !== '/' ? item.file.parent.path : '';
+      if (areaOf(item.file.path) === 'work') el.addClass('sbt-qm-work');
       body.createDiv({ cls: 'sbt-qm-sub', text: sub + (item.file.extension !== 'md' ? ` · .${item.file.extension}` : '') });
     } else body.createDiv({ text: item.title });
   }
@@ -440,7 +478,7 @@ class QuickMenu extends SuggestModal {
     if (item.kind === 'file') return leaf().openFile(item.file);
     if (item.kind === 'open') { const f = this.app.vault.getAbstractFileByPath(item.path); if (f instanceof TFile) return leaf().openFile(f); return; }
     if (item.kind === 'command') return this.app.commands.executeCommandById(item.command.id);
-    if (item.kind === 'create') return this.plugin.create(item.what, item.title, this.newTab);
+    if (item.kind === 'create') return this.plugin.create(item.what, item.title, this.newTab, item.area);
   }
 }
 class TitleModal extends Modal {
@@ -535,6 +573,11 @@ class SbToolsSettings extends PluginSettingTab {
     new Setting(c).setName('Reminders').setDesc('Notify about tasks whose `due` date is near or past').addToggle((t) => t.setValue(s.remind).onChange((v) => { s.remind = v; save(); }));
     new Setting(c).setName('System notification').setDesc('Also show an operating-system notification').addToggle((t) => t.setValue(s.systemNotify).onChange((v) => { s.systemNotify = v; save(); }));
     new Setting(c).setName('Days ahead').setDesc('0 = only due today and overdue').addSlider((sl) => sl.setLimits(0, 7, 1).setValue(s.daysAhead).setDynamicTooltip().onChange((v) => { s.daysAhead = v; save(); }));
+    new Setting(c).setName('Reminder area').setDesc('Which area\'s tasks to remind about').addDropdown((d) => {
+      d.addOption('', 'All areas');
+      for (const [k, a] of Object.entries(AREAS)) d.addOption(k, a.label);
+      d.setValue(s.remindScope || '').onChange((v) => { s.remindScope = v; save(); this.plugin.updateStatus(); });
+    });
     new Setting(c).setName('Check interval (minutes)').addSlider((sl) => sl.setLimits(5, 120, 5).setValue(s.intervalMin).setDynamicTooltip().onChange((v) => { s.intervalMin = v; save(); }));
   }
 }
@@ -591,29 +634,28 @@ class SbToolsPlugin extends Plugin {
   }
 
   // ------------------------------------------------ create
-  async create(what, title, newTab) {
+  async create(what, title, newTab, area) {
+    const act0 = this.app.workspace.getActiveFile();
+    area = area || (act0 && areaOf(act0.path)) || 'personal';
     if (!title) {
-      const heading = { note: 'New note', task: 'New task', idea: 'New idea' }[what];
-      if (what !== 'note') {
-        const board = this.app.plugins.plugins['sb-board'];
-        if (board && board.quickAdd) return board.quickAdd(what);
-      }
-      return new TitleModal(this.app, heading, (t) => this.create(what, t, newTab)).open();
+      const heading = { note: 'New note', task: 'New task', idea: 'New idea' }[what] + ' · ' + AREAS[area].label;
+      return new TitleModal(this.app, heading, (t) => this.create(what, t, newTab, area)).open();
     }
     const board = this.app.plugins.plugins['sb-board'];
     if (what !== 'note' && board && board.createCard) {
       let project = '';
       const act = this.app.workspace.getActiveFile();
-      if (act && !isProtected(act.path)) {
+      if (act && areaOf(act.path) === area) {
         const fm = (this.app.metadataCache.getFileCache(act) || {}).frontmatter || {};
         if (fm.type === 'project' || fm.type === 'research') project = act.basename;
         else if (fm.project) project = linkName(fm.project);
       }
-      const f = await board.createCard(what, { title, status: what === 'task' ? 'todo' : 'idea', priority: '', due: '', project });
+      const f = await board.createCard(what, { title, status: what === 'task' ? 'todo' : 'idea', priority: '', due: '', project, area });
       if (f) await this.app.workspace.getLeaf(newTab ? 'tab' : false).openFile(f);
       return;
     }
-    if (!this.app.vault.getAbstractFileByPath(INBOX)) await this.app.vault.createFolder(INBOX);
+    const INBOX = AREAS[area].inbox;
+    if (!this.app.vault.getAbstractFileByPath(INBOX)) await this.app.vault.createFolder(INBOX).catch(() => {});
     const base = sanitizeName(title) || 'New note';
     let path = normalizePath(`${INBOX}/${base}.md`), n = 2;
     while (this.app.vault.getAbstractFileByPath(path)) path = normalizePath(`${INBOX}/${base} (${n++}).md`);
@@ -623,16 +665,17 @@ class SbToolsPlugin extends Plugin {
   }
 
   // ------------------------------------------------ reminders
-  dueItems(ahead) {
+  dueItems(ahead, scope) {
+    if (scope === undefined) scope = this.settings.remindScope || '';
     const t = today(), out = [];
     for (const f of this.app.vault.getMarkdownFiles()) {
-      if (!analysable(f.path)) continue;
+      if (!analysable(f.path, scope)) continue;
       const fm = (this.app.metadataCache.getFileCache(f) || {}).frontmatter;
       if (!fm || fm.type !== 'task' || DONE.has(String(fm.status || ''))) continue;
       const due = dateStr(fm.due);
       if (!due) continue;
       const days = daysBetween(t, due);
-      if (days !== null && days <= ahead) out.push({ file: f, title: f.basename, due, days, project: linkName(fm.project) });
+      if (days !== null && days <= ahead) out.push({ file: f, title: f.basename, due, days, project: (areaOf(f.path) === 'work' ? 'Work · ' : '') + linkName(fm.project) });
     }
     return out.sort((a, b) => a.days - b.days);
   }
@@ -683,13 +726,15 @@ class SbToolsPlugin extends Plugin {
   }
 
   // ------------------------------------------------ heatmap helpers
-  gitDays(since) {
+  gitDays(since, scope) {
     return new Promise((resolve) => {
       const base = this.app.vault.adapter && this.app.vault.adapter.basePath;
       if (!base) return resolve({});
       let cp;
       try { cp = require('child_process'); } catch (e) { return resolve({}); }
-      cp.execFile('git', ['log', `--since=${since}`, '--date=short', '--format=%ad'], { cwd: base, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
+      const args = ['log', `--since=${since}`, '--date=short', '--format=%ad'];
+      if (scope && AREAS[scope]) args.push('--', AREAS[scope].root);
+      cp.execFile('git', args, { cwd: base, windowsHide: true, maxBuffer: 8 * 1024 * 1024 }, (err, stdout) => {
         if (err) return resolve({});
         const out = {};
         for (const d of String(stdout).split(/\r?\n/)) if (d) out[d] = (out[d] || 0) + 1;
@@ -697,10 +742,10 @@ class SbToolsPlugin extends Plugin {
       });
     });
   }
-  openDay(day) {
-    const items = collectDated(this.app).filter((i) => i.date === day);
+  openDay(day, scope) {
+    const items = collectDated(this.app, { scope }).filter((i) => i.date === day);
     for (const f of this.app.vault.getMarkdownFiles()) {
-      if (!analysable(f.path)) continue;
+      if (!analysable(f.path, scope)) continue;
       const fm = ((this.app.metadataCache.getFileCache(f) || {}).frontmatter) || {};
       if (dateStr(fm.created) === day || ymd(new Date(f.stat.mtime)) === day) items.push({ date: day, kind: 'note', file: f, title: f.basename });
     }
@@ -717,13 +762,16 @@ class SbToolsPlugin extends Plugin {
 
   // ------------------------------------------------ import
   pickAndImport() {
+    const act = this.app.workspace.getActiveFile();
+    const area = (act && areaOf(act.path)) || 'personal';
+    const ATTACH = AREAS[area].attach;
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = '.docx,.xlsx,.pdf,.pptx,.csv';
     input.onchange = async () => {
       const file = input.files && input.files[0];
       if (!file) return;
-      if (!this.app.vault.getAbstractFileByPath(ATTACH)) await this.app.vault.createFolder(ATTACH);
+      if (!this.app.vault.getAbstractFileByPath(ATTACH)) await this.app.vault.createFolder(ATTACH).catch(() => {});
       const name = file.name.replace(/[\\/:*?"<>|#^\[\]]/g, ' ');
       let path = normalizePath(`${ATTACH}/${name}`), n = 2;
       const dot = name.lastIndexOf('.');
@@ -735,6 +783,7 @@ class SbToolsPlugin extends Plugin {
   }
   runImport(path) {
     if (isProtected(path)) return;
+    const area = areaOf(path) || 'personal';
     const base = this.app.vault.adapter && this.app.vault.adapter.basePath;
     if (!base) { new Notice('Import works on desktop only.'); return; }
     const cp = require('child_process');
@@ -742,7 +791,7 @@ class SbToolsPlugin extends Plugin {
     const tryRun = (cmds) => {
       if (!cmds.length) { notice.hide(); new Notice('Python not found: import needs Python 3.'); return; }
       const [exe, ...pre] = cmds[0];
-      cp.execFile(exe, [...pre, '-X', 'utf8', TOOL, 'import', path, '--json'], { cwd: base, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, async (err, stdout, stderr) => {
+      cp.execFile(exe, [...pre, '-X', 'utf8', TOOL, 'import', path, '--json', '--scope', area], { cwd: base, windowsHide: true, maxBuffer: 32 * 1024 * 1024 }, async (err, stdout, stderr) => {
         if (err && err.code === 'ENOENT') return tryRun(cmds.slice(1));
         notice.hide();
         let res = null;
@@ -762,5 +811,5 @@ class SbToolsPlugin extends Plugin {
   onunload() { if (this.interval) window.clearInterval(this.interval); }
 }
 
-SbToolsPlugin._test = { isProtected, setProtected: (l) => { PROTECTED_DIRS = l; }, parseConfig, dateStr, daysBetween, addDays, levels, streaks, parseCsv, parseXlsx, unzip, colIndex, colName, collectDated, activityFromVault, linkName, dueText, sanitizeName };
+SbToolsPlugin._test = { isProtected, setProtected: (l) => { PROTECTED_DIRS = l; }, areaOf, parseScope, inScope, AREAS, parseConfig, dateStr, daysBetween, addDays, levels, streaks, parseCsv, parseXlsx, unzip, colIndex, colName, collectDated, activityFromVault, linkName, dueText, sanitizeName };
 module.exports = SbToolsPlugin;

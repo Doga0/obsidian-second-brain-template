@@ -1,6 +1,6 @@
 ---
 name: sb-distill
-description: Second Brain — Distill a concept from a source note or from across the vault into an evergreen knowledge note (40 Knowledge), or update an existing seed note. Use when the user runs /sb-distill or asks to "turn this into permanent knowledge".
+description: Second Brain — Distill a concept from a source note or from across the vault into an evergreen knowledge note (Personal/40 Knowledge; for work concepts Work/40 Systems & APIs) (40 Knowledge), or update an existing seed note. Use when the user runs /sb-distill or asks to "turn this into permanent knowledge".
 argument-hint: <concept | note name>
 ---
 # /sb-distill
@@ -8,7 +8,7 @@ argument-hint: <concept | note name>
 ## If the argument is a concept
 1. Use `vault_tool.py search` to find every context where it appears, including synonyms.
 2. **Threshold:** without at least 2 different notes or projects, don't create a knowledge note. Leave the concept where it is and say why.
-3. Update `40 Knowledge/<Concept>.md` if it exists, otherwise create it from the `Knowledge Note` template:
+3. Update `Personal/40 Knowledge/<Concept>.md` (a work system/concept: `Work/40 Systems & APIs/<Concept>.md`) if it exists, otherwise create it from the `Knowledge Note` template:
    - a `> [!info] Distilled by AI (<date>)` callout
    - **Essence**: 2–5 sentences; say so if you used general knowledge
    - **Where it appears in the vault**: one line per context, `[[Note]] §… — why it matters there`

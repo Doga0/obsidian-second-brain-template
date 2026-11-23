@@ -1,11 +1,11 @@
 ---
 name: sb-task
 description: Second Brain — Create, update or move task cards on the board. Can extract several tasks from free text (meeting notes, a to-do list, a chat). Use when the user runs /sb-task or says "add a task", "put this on the board", "mark X as done".
-argument-hint: <task | free text> [--project <Hub>] [--yes]
+argument-hint: <task | free text> [--project <Hub>] [--yes] [--scope personal|work|all]
 ---
 # /sb-task
 
-Task cards are notes in `15 Tasks/` (`type: task`). The schema is in `CLAUDE.md`.
+Task cards are notes in `Personal/15 Tasks/` and `Work/50 Tasks/` (`type: task`). A card goes to its project's area; without a project use `--scope` or the content (work → Work), and ask if unsure. The schema is in `CLAUDE.md`.
 
 ## New task(s)
 1. Extract tasks from the text. Each gets an **actionable title** (verb + object, ≤ 60 characters, valid as a file name: no `\ / : * ? " < > | # ^ [ ]`).

@@ -1,7 +1,7 @@
 ---
 name: sb-connect
 description: Second Brain — Find meaningful connections for one note across the vault, with relation type and reason for each, and add the approved ones in both directions. Use when the user runs /sb-connect or asks "what is this note related to?".
-argument-hint: <note name> [--yes]
+argument-hint: <note name> [--yes] [--scope personal|work|all]
 ---
 # /sb-connect
 

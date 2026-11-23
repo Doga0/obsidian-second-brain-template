@@ -1,15 +1,15 @@
 ---
 name: sb-ingest
 description: Second Brain — Process one Inbox note, URL or pasted text into the vault. Decide its type, place it in the right folder, add reasoned links, update the hub/MOC. Use when the user runs /sb-ingest or asks to "add/process this into the vault".
-argument-hint: <Inbox note | URL | text> [--yes]
+argument-hint: <Inbox note | URL | text> [--yes] [--scope personal|work|all]
 ---
 # /sb-ingest
 
 Follow `CLAUDE.md` (protected folders, immutable raw content, propose then write).
 
 ## Input
-- **Inbox note** (`00 Inbox/…`): process it.
-- **URL**: read it with WebFetch. Don't copy the full text. Create a note in `00 Inbox/` from the `Source Note` template containing the link, a structured summary in your own words, and at most a few short quotes. Then process that note.
+- **Inbox note** (`Personal/00 Inbox/…` or `Work/00 Inbox/…`): process it within its area.
+- **URL**: read it with WebFetch. Don't copy the full text. Create a note in the area's inbox (`--scope work` → `Work/00 Inbox/`, otherwise `Personal/00 Inbox/`) from the `Source Note` template containing the link, a structured summary in your own words, and at most a few short quotes. Then process that note.
 - **Pasted text / AI chat**: put it **unchanged** under "Raw content" in a `Source Note`, then process it.
 
 ## Steps

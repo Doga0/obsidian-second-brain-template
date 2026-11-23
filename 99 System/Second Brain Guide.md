@@ -14,9 +14,12 @@ An Obsidian vault structured as a "second brain", plus an AI layer that runs in 
 It follows Karpathy's *LLM Wiki* pattern: raw sources stay untouched, the AI maintains the linked wiki around them, and one schema file (`CLAUDE.md`) is the contract.
 
 ## Structure
+The vault has two areas with different layouts; the shared system sits at the root.
+
+**Personal/**
 | Folder | What goes in | Rule |
 |---|---|---|
-| `00 Inbox` | Every new note | Write without thinking; empty it weekly |
+| `00 Inbox` | Every new personal note | Write without thinking; empty it weekly |
 | `10 Maps` | Maps of content (MOCs) | One per area; curated by hand |
 | `15 Tasks` | Task cards (board) | Flat; linked to projects through `project` |
 | `20 Projects` | Work with an outcome and an end | **One folder + a hub with the same name** per project |
@@ -26,7 +29,21 @@ It follows Karpathy's *LLM Wiki* pattern: raw sources stay untouched, the AI mai
 | `60 Resources` | Reading list, `Attachments/` | |
 | `70 Analyses` | AI analyses, weekly reviews | Written by commands; you read and link them |
 | `90 Archive` | Finished or dropped project folders | Move the whole folder |
-| `99 System` | This guide, templates, `Index`, `Log`, `Health`, `AI Queue`, `config.json`, `scripts/` | Index/Health are generated |
+
+**Work/** (organized around projects, clients and meetings; entry point: [[MOC - Work]])
+| Folder | What goes in | Rule |
+|---|---|---|
+| `00 Inbox` | Raw work notes, pasted chats | Process with `/sb-inbox --scope work` |
+| `10 Projects/<Name>/` | Project hub, design notes, decisions | Decisions are numbered `ADR-001 - …` |
+| `20 Meetings` | Meeting notes (`Meeting` template) | Name: `YYYY-MM-DD - Organization - Topic`; action items can become task cards |
+| `30 Organizations & People` | Client, vendor and people cards (`Org` template) | Meetings and projects link here |
+| `40 Systems & APIs` | External systems, APIs, reusable technical knowledge | The "knowledge" layer of work |
+| `50 Tasks` | Work task cards | The board's *Work* area |
+| `60 Attachments` · `70 Analyses` · `90 Archive` | Files · work analyses · closed projects | |
+
+**At the root (shared):** `99 System` (this guide, templates, `Index`, `Log`, `Health`, `AI Queue`, `config.json`, `scripts/`), [[Home]], [[Board]], `CLAUDE.md`.
+
+**Choosing an area (scope):** the *All areas / Personal / Work* menu on boards and the calendar; `--scope personal|work|all` in AI commands; `scope` in MCP tools. The default is both. New cards go to their project's area; new notes go to the open note's area.
 
 **Project or research?** If it has a question and experiments → Research. If it has a deliverable (product, code, application) → Project. Unsure? Use Projects: as long as the links are right, nothing gets lost.
 
@@ -46,13 +63,13 @@ It follows Karpathy's *LLM Wiki* pattern: raw sources stay untouched, the AI mai
 **No tags.** Topic = link/`topics`, kind = `type`, state = `status`, place = folder. Add a tag only for a need none of these cover.
 
 ## Adding a note
-1. `Ctrl/Cmd+N`: the note lands in `00 Inbox`. A title and content are enough.
+1. `Ctrl/Cmd+N`: the note lands in `Personal/00 Inbox`; for a work note use `Ctrl/Cmd+O` → `+ title` → *Work* (`Work/00 Inbox`). A title and content are enough.
 2. Saving an AI chat or an article? Use the `Source Note` template and paste the text under "Raw content" untouched. Keep your own takeaways in their own section.
 3. If a conversation grows past ~1000 lines, start the next question as a new note and link them in sequence from the hub.
 4. With AI: `/sb-ingest <note or URL>` files and links it for you.
 
 ## Organizing a project
-1. `/sb-new project <Name>` (or create `20 Projects/<Name>/<Name>.md` from the `Project Hub` template).
+1. `/sb-new project <Name>` (or create `Personal/20 Projects/<Name>/<Name>.md`, or `Work/10 Projects/<Name>/<Name>.md` for work, from the `Project Hub` template).
 2. Fill in **Goal** and **Status**. Put related notes in the folder and give each a line in the hub: *what it is and why it matters*.
 3. Tasks are cards (`/sb-plan <Name>` proposes a plan); the hub's Tasks board shows only this project's cards.
 4. Every decision is its own note (`Decision - <short name>.md`, via `/sb-decide` or the `Decision` template). The hub's Decisions table lists them automatically. Decisions the AI suggested stay `proposed` until you approve them on Home. Months later this tells you whether *you* decided something or a model suggested it.
@@ -90,7 +107,7 @@ Trello/Jira-style management through the bundled **Second Brain Board** plugin (
 | Each hub's Tasks section | That project's cards only |
 
 - **Move:** drag and drop, or right-click → *Move →*. Moving to `doing` writes `started`, moving to `done` writes `completed`; progress reports use these dates.
-- **Add:** the column's `+`, or `Ctrl/Cmd+P` → *Quick add task* (the open note's project is preselected). Cards go to `15 Tasks/`.
+- **Add:** the column's `+`, or `Ctrl/Cmd+P` → *Quick add task* (the open note's project is preselected). Cards go to the project's area: `Personal/15 Tasks/` or `Work/50 Tasks/`.
 - **Card details:** click the card. Description, **subtasks** (a checklist, shown as `☑ 2/5` on the card), notes. Hover for a preview.
 - **Priority / due date:** right-click → *Priority*; set `due` in the card's Properties. Overdue dates turn red, dates within 3 days orange.
 - **Send to AI:** right-click → *Send to AI queue: brief / challenge / connect…*, then `/sb-queue`.
@@ -136,9 +153,9 @@ Every command follows the same safety rules:
 - `… lint` / `… index`: refresh Health and Index
 
 ## Protected folders
-To keep a folder (e.g. work or private notes) completely out of the AI's reach, add it to `99 System/config.json`:
+Areas separate personal and work notes, but the AI can still read both. To keep a folder (e.g. confidential client notes) completely out of the AI's reach, add it to `99 System/config.json`:
 ```json
-{ "protected": ["Private"], "wip_limit": null }
+{ "protected": ["Work/Confidential"], "wip_limit": null }
 ```
 Commands and the board plugin will never read, link or write it, and `lint` verifies with file hashes that nothing changed (run `python "99 System/scripts/vault_tool.py" protected-baseline` once after adding it). For extra safety, also exclude it from Git in `.gitignore`. `wip_limit` (e.g. `3`) makes `lint` warn when too many tasks are in progress.
 
@@ -161,21 +178,21 @@ All bundled and enabled. Community plugins come from the official Obsidian plugi
 | **Formatting toolbar** | Bold, headings, lists, colors, tables… as buttons above the editor | *Editing Toolbar* |
 | **Table of contents** | `/` → *Insert table of contents*; a live block that updates as the note changes | *Automatic Table of Contents* |
 | **LaTeX** | `$x^2$` inline, `$$…$$` block (built-in MathJax). Shortcuts: in math, `//` → `\frac{}{}`, `sr` → `^2`; in text, `mk ` → inline math, `dm ` → block | *Latex Suite* |
-| **Quick menu (navigator)** | `Ctrl/Cmd+O`: find notes, PDFs and files (aliases included). `! title` → task, `+ title` → Inbox note, `? title` → idea, `>` → commands, `Ctrl/Cmd+Enter` opens in a new tab. The classic Quick switcher moved to `Ctrl/Cmd+Shift+O` | *Second Brain Tools* |
-| **Calendar** | [[Board#Calendar]]: completed, started and due tasks plus decisions in a month view | *Second Brain Tools* (`sb-calendar` block) |
-| **Activity heatmap** | [[Home#Activity]]: GitHub-style; tasks + notes + git commits per day, streak stats; click a day to see its work | *Second Brain Tools* (`sb-heatmap` block) |
-| **Reminders** | Obsidian + system notification for tasks whose `due` is today/tomorrow or past (once a day per task); ⏰ counter in the status bar. Settings: *Settings → Second Brain Tools* | *Second Brain Tools* |
+| **Quick menu (navigator)** | `Ctrl/Cmd+O`: find notes, PDFs and files (aliases included). `! title` → task, `+ title` → inbox note, `? title` → idea (each offered for Personal and Work), `>` → commands, `Ctrl/Cmd+Enter` opens in a new tab. The classic Quick switcher moved to `Ctrl/Cmd+Shift+O` | *Second Brain Tools* |
+| **Calendar** | [[Board#Calendar]]: completed, started and due tasks plus decisions in a month view, with an area menu (or `scope: work` in the block) | *Second Brain Tools* (`sb-calendar` block) |
+| **Activity heatmap** | [[Home#Activity]]: GitHub-style; tasks + notes + git commits per day, streak stats, area menu; click a day to see its work | *Second Brain Tools* (`sb-heatmap` block) |
+| **Reminders** | Obsidian + system notification for tasks whose `due` is today/tomorrow or past (once a day per task); ⏰ counter in the status bar. Settings (including which area): *Settings → Second Brain Tools* | *Second Brain Tools* |
 | **Folder icons** | Numbered folders come with icons; right-click a folder → *Change icon* | *Iconize* |
 | **Working on PDFs** | Select text in a PDF → pick a color to highlight; copy/drag the selection into a note to get a link back to that spot. PDF++ can also write annotations into the PDF file (off by default) | *PDF++* |
-| **Word (.docx)** | Preview inside Obsidian and embed with `![[file.docx]]`; the *Convert* button creates a Markdown copy (images go to `60 Resources/Attachments`, the original is kept) | *Docxer* |
+| **Word (.docx)** | Preview inside Obsidian and embed with `![[file.docx]]`; the *Convert* button creates a Markdown copy (images go to an `Attachments/` folder next to the file, the original is kept) | *Docxer* |
 | **Excel (.xlsx) / CSV** | Opens inside Obsidian as a table with sheet tabs | *Second Brain Tools* |
-| **Import** | `Ctrl/Cmd+P` → *Import file* (docx, xlsx, pptx, pdf, csv) or right-click a file → *Convert to Markdown note*. The original goes to `60 Resources/Attachments`, the text to `00 Inbox` as a `type: source` note (then `/sb-ingest`). From a terminal: `vault_tool.py import <file>` | *Second Brain Tools* + `vault_tool.py` |
+| **Import** | `Ctrl/Cmd+P` → *Import file* (docx, xlsx, pptx, pdf, csv) or right-click a file → *Convert to Markdown note*. The original goes to the area's attachments (`Personal/60 Resources/Attachments` or `Work/60 Attachments`), the text to that area's inbox as a `type: source` note (then `/sb-ingest`). From a terminal: `vault_tool.py import <file>` | *Second Brain Tools* + `vault_tool.py` |
 
-Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git activity and import). The calendar, heatmap, reminders and import skip protected folders and `99 System/`; the quick menu lists every file, for navigation only.
+Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git activity and import). The calendar, heatmap, reminders and import skip protected folders and `99 System/` and can be limited to one area; the quick menu lists every file, for navigation only, and marks work files.
 
 **MCP (vault access for AI apps).** `99 System/scripts/vault_mcp.py` is a small MCP server (Python standard library only, stdio). The client starts it when needed.
 - Tools: `vault_index`, `vault_search`, `vault_read_note`, `vault_note_context`, `vault_list_tasks`, `vault_list_notes`, plus `vault_capture` (Inbox) and `vault_create_task`, which only **create** files. It can't change, move or delete existing notes; every write is logged in [[Log]].
-- Protected folders, `.obsidian`, `.git` and `.claude` are invisible: not listed, searched or read.
+- Every tool takes `scope` (personal / work / all). Protected folders, `.obsidian`, `.git` and `.claude` are invisible: not listed, searched or read. Creating notes and tasks writes to the project's area (else the `scope`).
 - **Claude Code:** defined in `.mcp.json` at the vault root; approve the `second-brain` server the first time.
 - **Claude Desktop:** *Settings → Developer → Edit Config*, add the server below (use the full path to your vault), then restart Claude Desktop:
   ```json
