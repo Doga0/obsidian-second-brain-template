@@ -58,6 +58,10 @@ for d in "00 Inbox" "15 Tasks" "60 Resources/Attachments" "70 Analyses" "90 Arch
   [ -d "$d" ] || { mkdir -p "$d"; ok "created: $d"; }
 done
 ok "Folder structure complete"
+# MCP server definition for Claude Code: point it at the Python found on this machine
+if [ -n "$PY" ] && [ "$PY" != "python" ] && [ -f .mcp.json ] && grep -q '"command": "python"' .mcp.json; then
+  sed -i.bak "s/\"command\": \"python\"/\"command\": \"$PY\"/" .mcp.json && rm -f .mcp.json.bak && ok "MCP server set to use $PY"
+fi
 if [ "$REMOVE_EXAMPLES" = 1 ] && [ -n "$PY" ]; then step "Example notes"; "$PY" "$TOOL" clean-examples --yes; fi
 
 # ------------------------------------------------------------------ 3. git: version history for the Obsidian Git plugin

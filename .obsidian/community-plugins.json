@@ -1,4 +1,12 @@
 [
   "sb-board",
-  "obsidian-git"
+  "obsidian-git",
+  "sb-tools",
+  "various-complements",
+  "obsidian-icon-folder",
+  "pdf-plus",
+  "obsidian-latex-suite",
+  "automatic-table-of-contents",
+  "editing-toolbar",
+  "docxer"
 ]

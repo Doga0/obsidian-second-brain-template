@@ -11,10 +11,15 @@ A ready-to-use Obsidian vault for running a **second brain**: projects, research
 - 🤖 **17 AI commands** (`/sb-ingest`, `/sb-ask`, `/sb-plan`, `/sb-review`, `/sb-challenge`, …) following the LLM-Wiki pattern (ingest → query → lint), with safety rules: propose before writing, never edit raw sources, log every change
 - 📊 **Dashboards** built with native Obsidian Bases: pending decisions, active projects, AI queue, Inbox
 - 🕓 **Version history built in:** the bundled Git plugin auto-commits every 10 minutes; connect your own private repo for off-site backup and multi-device sync
+- 🗓 **Calendar, activity heatmap and reminders:** see what got done when, a GitHub-style activity graph, and notifications for due tasks
+- ⚡ **One quick menu** (`Ctrl/Cmd+O`): jump to any note, create a note/task/idea, or run a command
+- ✍️ **Writing tools:** `/` command menu, autocomplete, formatting toolbar, auto-updating table of contents, LaTeX shortcuts, folder icons
+- 📄 **Files:** highlight and annotate PDFs, preview Word and Excel files, import docx/xlsx/pptx/pdf/csv as notes
+- 🔌 **MCP server:** give Claude Desktop, Claude Code or other MCP clients safe, read-mostly access to your vault
 - 🔒 **Protected folders:** keep private folders completely out of the AI's reach
 - 🧪 Fictional **example notes** you can delete with one command
 
-No paid plugins and no API keys. Two community plugins come bundled and enabled: **Second Brain Board** (part of this template) and **[Git](https://github.com/Vinzent03/obsidian-git)** by Vinzent03 (MIT, v2.43.0, unmodified, license included). Everything else is native Obsidian.
+No paid plugins and no API keys. All plugins below come bundled and enabled; community plugins are unmodified releases from the official Obsidian plugin list, with their licenses included.
 
 ## Install
 
@@ -35,7 +40,7 @@ The command downloads the template into `Documents/Second Brain` and runs the se
 - registers the folder as an Obsidian vault and opens it
 - runs a health check
 
-When Obsidian asks whether to **trust this vault's plugins**, choose trust: that enables the board and Git.
+When Obsidian asks whether to **trust this vault's plugins**, choose trust: that enables the bundled plugins (board, tools, Git and the rest).
 
 ### Back up to your own private repository (optional)
 Out of the box the Git plugin keeps **local** history only. To also push to GitHub (backup + other devices), create an **empty private** repository and run:
@@ -47,7 +52,7 @@ bash "$HOME/Documents/Second Brain/setup.sh" --remote https://github.com/<you>/<
 ```
 Setup pushes your vault and switches the Git plugin to automatic sync (commit + push every 10 minutes, pull on startup). Or click **Use this template** on GitHub, clone your new private repo and run setup inside it: the remote is detected automatically. Optional: `-GitName` / `-GitEmail` (`--git-name` / `--git-email`) set the commit identity.
 
-**Manual install:** download the ZIP, unzip it anywhere, open the folder in Obsidian with *Open folder as vault*, and enable the **Second Brain Board** plugin in *Settings → Community plugins*.
+**Manual install:** download the ZIP, unzip it anywhere, open the folder in Obsidian with *Open folder as vault*, and turn on community plugins in *Settings → Community plugins* (the bundled ones are already listed as enabled).
 
 ## Requirements
 | | Needed for |
@@ -55,6 +60,7 @@ Setup pushes your vault and switches the Git plugin to automatic sync (commit + 
 | [Obsidian](https://obsidian.md) 1.9+ | everything (Bases need 1.9) |
 | Python 3.8+ | the AI commands' helper script (`vault_tool.py`) |
 | [Git](https://git-scm.com) | version history (installed by setup on Windows; optional) |
+| Desktop Obsidian | the Second Brain Tools plugin (calendar, heatmap, quick menu, reminders, spreadsheet view, import); everything else also works on mobile |
 | [Claude Code](https://claude.com/claude-code) | the `/sb-*` AI commands (optional: the vault works without it) |
 
 ## First steps
@@ -80,25 +86,86 @@ Setup pushes your vault and switches the Git plugin to automatic sync (commit + 
 Home.md · Board.md · CLAUDE.md (AI contract)
 ```
 
-## AI commands
+## Plugins
+Everything lives in `.obsidian/plugins/` with its settings, so it works right after setup.
+
+| Plugin | Version | What it does | How to use it | License |
+|---|---|---|---|---|
+| **Second Brain Board** (`sb-board`) | 1.0.0 | Kanban boards where every card is a note and the column is its `status`: drag and drop, priorities, due dates, subtask counter, project progress bars | `Board.md`, `sb-board` blocks in hubs; `Ctrl/Cmd+P` → *Quick add task* | MIT (this template) |
+| **Second Brain Tools** (`sb-tools`) | 1.0.0 | Calendar, GitHub-style activity heatmap, quick menu, due-date reminders, xlsx/csv viewer, file import | `Ctrl/Cmd+O` quick menu · calendar in `Board.md` · heatmap in `Home.md` · `Ctrl/Cmd+P` → *Import file* | MIT (this template) |
+| **[Git](https://github.com/Vinzent03/obsidian-git)** | 2.43.0 | Auto-commit every 10 minutes; with a remote, push and pull on startup; file history | `Ctrl/Cmd+P` → *Git: Commit-and-sync* / *Open file history* | MIT |
+| **[Various Complements](https://github.com/tadashi-aikawa/obsidian-various-complements-plugin)** | 11.4.2 | Autocomplete from the words and note names in your vault | Pick from the list while typing | MIT |
+| **[Editing Toolbar](https://github.com/PKM-er/obsidian-editing-toolbar)** | 4.1.14 | Formatting toolbar (bold, headings, lists, colors, tables…) | Buttons above the editor | MPL-2.0 |
+| **[Automatic Table of Contents](https://github.com/johansatge/obsidian-automatic-table-of-contents)** | 1.8.0 | Table of contents block that updates as the note changes | `/` → *Insert table of contents* | MIT |
+| **[Latex Suite](https://github.com/artisticat1/obsidian-latex-suite)** | 1.14.5 | LaTeX snippets (`//` → `\frac`, `sr` → `^2`); `mk ` inline math, `dm ` block math. `mk` is set to fire only as a separate word | Type inside `$…$` / `$$…$$` | MIT |
+| **[Iconize](https://github.com/FlorianWoelki/obsidian-iconize)** | 2.14.7 | Folder and file icons in the file explorer; the numbered folders come with icons | Right-click a folder → *Change icon* | MIT |
+| **[PDF++](https://github.com/RyotaUshio/obsidian-pdf-plus)** | 0.40.31 | Highlight PDFs, link a selection into a note, comment; can also write annotations into the PDF | Select text in a PDF → pick a color | MIT |
+| **[Docxer](https://github.com/Developer-Mike/obsidian-docxer)** | 2.3.1 | Preview Word (.docx) files, embed them in notes, convert them to Markdown | Open a `.docx` → *Convert* | GPL-3.0 |
+
+The core **Slash commands** plugin is also on: type `/` at the start of a line to search every command (headings, tables, callouts, templates, TOC…). Details, choices and what was left out on purpose: *99 System/Second Brain Guide → Writing, navigation and tracking tools*.
+
+## AI commands (Claude Code skills)
+Open the vault in Claude Code and type `/sb-`. Definitions live in `.claude/skills/sb-*/SKILL.md`; the rules they all follow are in [`CLAUDE.md`](CLAUDE.md) (propose before writing, never edit raw sources, never touch protected folders, log every write).
+
+| Command | Arguments | What it does |
+|---|---|---|
+| `/sb-ingest` | `<Inbox note \| URL \| text> [--yes]` | Files a note/URL/text: decides its type, puts it in the right folder, adds reasoned links, updates the hub/MOC |
+| `/sb-inbox` | `[--yes]` | Classifies everything in `00 Inbox` and processes it with one approval table |
+| `/sb-ask` | `<question> [--save]` | Answers from your notes with citations; separates what the vault says from Claude's inference |
+| `/sb-connect` | `<note name> [--yes]` | Finds meaningful links for a note and adds them both ways, with relation type and reason |
+| `/sb-distill` | `<concept \| note name>` | Distills a concept into a knowledge note (`40 Knowledge`) or updates a seed note |
+| `/sb-challenge` | `<note \| idea text> [--save]` | Red-teams an idea or decision: assumptions, weak points, counter-evidence, cheapest test |
+| `/sb-emerge` | `[MOC name \| area] [--save]` | Finds cross-project patterns, recurring questions and new idea combinations |
+| `/sb-new` | `<project\|research\|idea\|moc> <name> [goal]` | New project/research/idea/MOC: folder, hub from template, MOC link |
+| `/sb-brief` | `<hub> [--update]` | Current state of a project: goal, decisions, open questions, next steps, risks |
+| `/sb-decide` | `<hub> "<decision>" \| review` | Logs a decision or walks through pending (`proposed`) decisions to accept/reject |
+| `/sb-experiment` | `<hub> "<experiment>" [result \| file]` | Adds an experiment to the hub's log or records its result against the hypotheses |
+| `/sb-task` | `<task \| free text> [--project <Hub>] [--yes]` | Creates, updates or moves board cards; extracts several tasks from free text |
+| `/sb-plan` | `<Hub> [goal or horizon]` | Reads a hub and proposes an ordered, prioritized task plan; creates cards on approval |
+| `/sb-standup` | `[days] [--project <Hub>] [--save]` | Progress report: done/started work, blockers, overdue and upcoming dates, project progress |
+| `/sb-review` | `[--no-save]` | Weekly review: projects, dates, decisions, Inbox, AI queue; writes a review note with a focus suggestion |
+| `/sb-lint` | `[--deep] [--yes]` | Health check: broken links, orphans, missing metadata, stale hubs, protected-folder integrity; `--deep` adds contradiction checks |
+| `/sb-queue` | `[--yes]` | Processes AI requests left in Obsidian (`ai:` property, `AI Queue.md`) |
+
+## MCP server
+`99 System/scripts/vault_mcp.py`: Python standard library only, stdio. The MCP client starts it when needed.
+- **Claude Code:** defined in `.mcp.json` at the vault root (approve it the first time).
+- **Claude Desktop:** add it to `claude_desktop_config.json` (example in the Guide).
+- Protected folders, `.obsidian/`, `.git/` and `.claude/` are invisible: not listed, searched or read. Write tools only **create** new files; they can't change, move or delete existing notes. Every write is logged to `99 System/Log.md`.
+
+| Tool | Kind | Parameters | What it does |
+|---|---|---|---|
+| `vault_index` | read | none | Returns the catalog (`99 System/Index.md`): type, status and summary of every note |
+| `vault_search` | read | `query`, `k` | Ranked keyword search over note sections (accent-insensitive); file + line number |
+| `vault_read_note` | read | `path`, `offset`, `limit` | Reads a note with line numbers; accepts a path or a note name |
+| `vault_note_context` | read | `note` | Frontmatter, heading outline, outgoing links and backlinks |
+| `vault_list_tasks` | read | `project` | Board cards as JSON: status, priority, dates, subtask count |
+| `vault_list_notes` | read | `folder` | List of note files, optionally limited to a folder |
+| `vault_capture` | create | `title`, `content`, `source` | Writes a new note to `00 Inbox` |
+| `vault_create_task` | create | `title`, `project`, `priority`, `due`, `description`, `subtasks` | Writes a new `status: todo` task card to `15 Tasks` |
+
+## Helper script
+`python "99 System/scripts/vault_tool.py" <command>`: the deterministic tool behind the AI commands and plugins (add `-X utf8` after `python` on Windows).
+
 | Command | What it does |
 |---|---|
-| `/sb-ingest` · `/sb-inbox` | file new notes/URLs/text with reasoned links |
-| `/sb-ask` | answer from your notes, with citations |
-| `/sb-connect` · `/sb-distill` | find links · turn a concept into a knowledge note |
-| `/sb-challenge` · `/sb-emerge` | red-team an idea · find cross-project patterns |
-| `/sb-new` · `/sb-brief` | start a project/research/idea/MOC · get back up to speed |
-| `/sb-task` · `/sb-plan` · `/sb-standup` | cards · project plans · progress reports |
-| `/sb-decide` · `/sb-experiment` | decision log · experiment log |
-| `/sb-review` · `/sb-lint` · `/sb-queue` | weekly review · health check · process requests left in Obsidian |
-
-The rules every command follows are in [`CLAUDE.md`](CLAUDE.md). Commands live in `.claude/skills/`, so you can edit them or add your own.
+| `lint [--no-write]` | Health check; writes `99 System/Health.md` |
+| `index` | Regenerates the `99 System/Index.md` catalog |
+| `search <query> [--k N]` | Section-level ranked search |
+| `context <note>` | Outline, links and backlinks of a note |
+| `tasks [--project X] [--json]` | The board as text/JSON + last 7 days of activity |
+| `queue` | Pending AI requests |
+| `import <file> [--json]` | docx/xlsx/pptx/pdf/csv → `type: source` note in `00 Inbox`; original kept in `60 Resources/Attachments` |
+| `log <op> <text>` | Appends to `99 System/Log.md` |
+| `stats` | Counts by type / status / folder |
+| `protected-baseline` | Records hashes of protected folders |
+| `clean-examples [--yes]` | Lists (or deletes) the example notes |
 
 ## Privacy
 - Your notes stay local; nothing in the template sends data anywhere.
-- AI commands run only when you call them in Claude Code.
+- AI commands run only when you call them in Claude Code; the MCP server runs only when an MCP client you configured starts it.
 - List private folders under `"protected"` in `99 System/config.json` to exclude them from every command and the board.
 - If you keep your vault in Git, use a **private** repository.
 
 ## License
-[MIT](LICENSE). The bundled [Obsidian Git](https://github.com/Vinzent03/obsidian-git) plugin is MIT-licensed by its authors; see `.obsidian/plugins/obsidian-git/LICENSE`.
+[MIT](LICENSE). Bundled community plugins keep their own licenses (MIT, except Editing Toolbar: MPL-2.0 and Docxer: GPL-3.0); each plugin folder in `.obsidian/plugins/` contains its `LICENSE`.

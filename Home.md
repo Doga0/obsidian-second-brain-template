@@ -11,11 +11,18 @@ type: system
 **Board:** [[Board]] · **Health:** [[Health]] · **Catalog:** [[Index]] · **History:** [[Log]]
 
 ## Currently working on
-*Full board, projects and idea pipeline: [[Board]]. Quick task from anywhere: `Ctrl/Cmd+P` → "Quick add task".*
+*Full board, projects and idea pipeline: [[Board]]. One menu for everything: `Ctrl/Cmd+O` (open a note, `!` new task, `+` new note, `>` commands).*
 ```sb-board
 type: task
 hide-done-after: 7
 filters: false
+```
+
+## Activity
+*Tasks completed/started, notes created/edited and git commits per day. Click a day to see what happened.*
+```sb-heatmap
+weeks: 52
+source: tasks, notes, git
 ```
 
 ## Decisions awaiting approval

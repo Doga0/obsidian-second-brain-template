@@ -73,7 +73,7 @@ It follows Karpathy's *LLM Wiki* pattern: raw sources stay untouched, the AI mai
 - **Graph view:** `topics` links make MOCs act as cluster centers. For one note's neighbourhood use *Local graph*.
 
 ## Finding things
-- `Ctrl/Cmd+O` Quick switcher (aliases included) · `Ctrl/Cmd+Shift+F` search (`path:"20 Projects" keyword`, `[status:active]`)
+- `Ctrl/Cmd+O` quick menu: find any note (aliases included), create notes/tasks, run commands; classic Quick switcher on `Ctrl/Cmd+Shift+O` · `Ctrl/Cmd+Shift+F` search (`path:"20 Projects" keyword`, `[status:active]`)
 - [[Home]]: tables for pending decisions, active projects, AI queue, Inbox, analyses, knowledge.
 - Natural language: `/sb-ask <question>` in Claude Code, with cited answers. [[Index]] is a one-line catalog of every note.
 - Hubs are the entry point to every project: "what did I decide here?" → the hub's Decisions table.
@@ -151,6 +151,43 @@ The vault is a Git repository (setup creates it) and the bundled **Git** plugin 
 - `.gitattributes` keeps every file byte-identical across machines; `.gitignore` excludes device-specific state. **Add your protected folders to `.gitignore` too** if they shouldn't be versioned.
 - Use a **private** repository for your personal vault. Don't want Git at all? Disable the Git plugin in *Settings → Community plugins* and run setup with `-NoGit` / `--no-git`.
 
+## Writing, navigation and tracking tools
+All bundled and enabled. Community plugins come from the official Obsidian plugin list, unmodified, with their licenses in their folders.
+
+| Need | How | Plugin |
+|---|---|---|
+| **Command menu** | Type `/` at the start of a line: headings, tables, callouts, code blocks, templates, TOC… every command is searchable | Core *Slash commands* |
+| **Autocomplete** | Suggestions from the words and note names in your vault while you type | *Various Complements* |
+| **Formatting toolbar** | Bold, headings, lists, colors, tables… as buttons above the editor | *Editing Toolbar* |
+| **Table of contents** | `/` → *Insert table of contents*; a live block that updates as the note changes | *Automatic Table of Contents* |
+| **LaTeX** | `$x^2$` inline, `$$…$$` block (built-in MathJax). Shortcuts: in math, `//` → `\frac{}{}`, `sr` → `^2`; in text, `mk ` → inline math, `dm ` → block | *Latex Suite* |
+| **Quick menu (navigator)** | `Ctrl/Cmd+O`: find notes, PDFs and files (aliases included). `! title` → task, `+ title` → Inbox note, `? title` → idea, `>` → commands, `Ctrl/Cmd+Enter` opens in a new tab. The classic Quick switcher moved to `Ctrl/Cmd+Shift+O` | *Second Brain Tools* |
+| **Calendar** | [[Board#Calendar]]: completed, started and due tasks plus decisions in a month view | *Second Brain Tools* (`sb-calendar` block) |
+| **Activity heatmap** | [[Home#Activity]]: GitHub-style; tasks + notes + git commits per day, streak stats; click a day to see its work | *Second Brain Tools* (`sb-heatmap` block) |
+| **Reminders** | Obsidian + system notification for tasks whose `due` is today/tomorrow or past (once a day per task); ⏰ counter in the status bar. Settings: *Settings → Second Brain Tools* | *Second Brain Tools* |
+| **Folder icons** | Numbered folders come with icons; right-click a folder → *Change icon* | *Iconize* |
+| **Working on PDFs** | Select text in a PDF → pick a color to highlight; copy/drag the selection into a note to get a link back to that spot. PDF++ can also write annotations into the PDF file (off by default) | *PDF++* |
+| **Word (.docx)** | Preview inside Obsidian and embed with `![[file.docx]]`; the *Convert* button creates a Markdown copy (images go to `60 Resources/Attachments`, the original is kept) | *Docxer* |
+| **Excel (.xlsx) / CSV** | Opens inside Obsidian as a table with sheet tabs | *Second Brain Tools* |
+| **Import** | `Ctrl/Cmd+P` → *Import file* (docx, xlsx, pptx, pdf, csv) or right-click a file → *Convert to Markdown note*. The original goes to `60 Resources/Attachments`, the text to `00 Inbox` as a `type: source` note (then `/sb-ingest`). From a terminal: `vault_tool.py import <file>` | *Second Brain Tools* + `vault_tool.py` |
+
+Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git activity and import). The calendar, heatmap, reminders and import skip protected folders and `99 System/`; the quick menu lists every file, for navigation only.
+
+**MCP (vault access for AI apps).** `99 System/scripts/vault_mcp.py` is a small MCP server (Python standard library only, stdio). The client starts it when needed.
+- Tools: `vault_index`, `vault_search`, `vault_read_note`, `vault_note_context`, `vault_list_tasks`, `vault_list_notes`, plus `vault_capture` (Inbox) and `vault_create_task`, which only **create** files. It can't change, move or delete existing notes; every write is logged in [[Log]].
+- Protected folders, `.obsidian`, `.git` and `.claude` are invisible: not listed, searched or read.
+- **Claude Code:** defined in `.mcp.json` at the vault root; approve the `second-brain` server the first time.
+- **Claude Desktop:** *Settings → Developer → Edit Config*, add the server below (use the full path to your vault), then restart Claude Desktop:
+  ```json
+  {"mcpServers": {"second-brain": {"command": "python", "args": ["-X", "utf8", "<path to vault>/99 System/scripts/vault_mcp.py"]}}}
+  ```
+  On macOS/Linux use `python3`; if Claude can't find Python, put the interpreter's full path in `command`.
+
+**Deliberate choices:**
+- *Editing Toolbar* instead of *Markdown Formatting Assistant*: same job (formatting buttons), more widely used and maintained.
+- No auto-formatter (*Linter*): it rewrites notes on save and could change raw source notes (`type: source`).
+- Latex Suite's `mk` shortcut only fires as a separate word, so it doesn't trigger inside ordinary words.
+
 ## Weekly maintenance (15 min)
 1. `/sb-review`: weekly review note with focus, dates, pending decisions, maintenance list.
 2. `/sb-inbox`: empty the Inbox with one approval table.
@@ -163,5 +200,5 @@ The vault is a Git repository (setup creates it) and the bundled **Git** plugin 
 - **Before adding a folder**, check whether `type`, `project` or a MOC already does the job. Maximum depth: `Category/Project/note`.
 - **Move and rename files inside Obsidian** (*Automatically update internal links* is on); moving them outside Obsidian breaks links.
 - **AI output is a source, not knowledge.** Version numbers, dates, prices and citations from AI chats shouldn't enter knowledge notes unverified.
-- **Plugins:** the bundled board and Git plugins are all you need. Optional: *Homepage* (open Home at startup), *QuickAdd* (one-key capture), the official *Web Clipper* (clip articles into the Inbox, then `/sb-ingest`). Dataview isn't needed; Bases covers it.
+- **Plugins:** the bundled set is listed in [[#Writing, navigation and tracking tools]]. The core system (notes, Bases, templates, AI commands) also works without them. Before adding one: is it in the official list, maintained, and does it stay out of protected folders? Optional extras: *Homepage* (open Home at startup), the official *Web Clipper* (clip articles into the Inbox, then `/sb-ingest`). Dataview isn't needed; Bases covers it.
 - **Example notes:** everything marked `example: true` can be removed with `python "99 System/scripts/vault_tool.py" clean-examples --yes`.

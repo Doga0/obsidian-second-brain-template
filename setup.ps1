@@ -81,6 +81,13 @@ foreach ($d in @('00 Inbox', '15 Tasks', '60 Resources\Attachments', '70 Analyse
   if (-not (Test-Path -LiteralPath $p)) { New-Item -ItemType Directory -Path $p | Out-Null; Ok "created: $d" }
 }
 Ok 'Folder structure complete'
+# MCP server definition for Claude Code: point it at the Python found on this machine
+$mcpFile = Join-Path $Vault '.mcp.json'
+if ($py -and $py -ne 'python' -and (Test-Path -LiteralPath $mcpFile)) {
+  $mcpText = [IO.File]::ReadAllText($mcpFile)
+  $mcpNew = $mcpText.Replace('"command": "python"', '"command": "' + $py + '"')
+  if ($mcpNew -ne $mcpText) { [IO.File]::WriteAllText($mcpFile, $mcpNew, (New-Object Text.UTF8Encoding $false)); Ok "MCP server set to use '$py'" }
+}
 if ($RemoveExamples -and $py) {
   Step 'Example notes'
   & $py -X utf8 $Tool clean-examples --yes | Out-Host

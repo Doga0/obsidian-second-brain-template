@@ -55,8 +55,10 @@ python "99 System/scripts/vault_tool.py" lint                     # writes Healt
 python "99 System/scripts/vault_tool.py" index                    # writes Index.md
 python "99 System/scripts/vault_tool.py" queue                    # AI queue
 python "99 System/scripts/vault_tool.py" log <op> "<text>"
+python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx/pdf/csv -> source note in 00 Inbox
 ```
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
+MCP server: `99 System/scripts/vault_mcp.py` (same rules; protected folders are invisible; it only creates new notes/tasks).
 Retrieval order: `99 System/Index.md`, then `search`, then `Read` only the relevant line ranges. Don't read long source notes end to end.
 
 ## 4. Note types

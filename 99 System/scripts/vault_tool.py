@@ -16,6 +16,7 @@ Commands
   stats                          Counts by type / status / folder
   protected-baseline             Record hashes of protected folders (see config.json)
   clean-examples [--yes]         List (or delete with --yes) notes marked `example: true`
+  import <file> [--json]         docx/xlsx/pptx/pdf/csv -> source note in 00 Inbox (original kept in Attachments)
 
 Protected folders (config.json -> "protected") are never parsed or written by this tool;
 their files are only hashed so `lint` can prove they were not modified.
@@ -633,6 +634,21 @@ if __name__ == "__main__":
         cmd_protected_baseline()
     elif cmd == "clean-examples":
         cmd_clean_examples("--yes" in a)
+    elif cmd == "import":
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import vault_import
+        files = [x for x in a[1:] if not x.startswith("--")]
+        if not files:
+            print("usage: import <file> [--json]")
+            sys.exit(1)
+        for f in files:
+            try:
+                res = vault_import.import_file(f, VAULT, PROTECTED)
+            except Exception as e:  # report, keep going
+                res = {"error": f"{f}: {e}"}
+            if "note" in res:
+                cmd_log("import", f"{res['attachment']} -> [[{res['note'][:-3]}]]" + (f" ({res['warning']})" if res["warning"] else ""))
+            print(json.dumps(res, ensure_ascii=False) if "--json" in a else (res.get("error") or f"note: {res['note']}" + (f"\nwarning: {res['warning']}" if res["warning"] else "")))
     else:
         print(__doc__)
         sys.exit(1)

@@ -34,6 +34,12 @@ filters: false
 ```
 
 ## Calendar
+*✓ completed · 📅 due (red = overdue) · ▶ started · ⚖ decision. The board writes start/completion dates; set `due` on the card. For one project, add `project: <Hub>` to the block.*
+```sb-calendar
+show: completed, due, started, decided
+```
+
+## Tracking tables
 ```base
 filters:
   and:
