@@ -3,7 +3,7 @@ type: system
 ---
 # Obsidian Second Brain Template
 
-A ready-to-use Obsidian vault for running a **second brain**: projects, research, knowledge, ideas and tasks, with a **kanban board** and an **AI command layer** for [Claude Code](https://claude.com/claude-code).
+A ready-to-use Obsidian vault for running a **second brain**: projects, research, knowledge, ideas and tasks, with a **kanban board** and a shared **AI skill layer** for [Claude Code](https://claude.com/claude-code) and Codex.
 
 - 🗂 **Two areas, Personal and Work:** a second-brain layout (Inbox → Projects / Research / Knowledge / Ideas → Archive) for personal notes, and a project / meeting / client layout for work; every view and command can show one or both
 - 📋 **Kanban board:** Trello/Jira-style boards where every card is a real note (To Do / In Progress / Done), with drag and drop, priorities, due dates, subtasks and per-project progress bars
@@ -15,7 +15,7 @@ A ready-to-use Obsidian vault for running a **second brain**: projects, research
 - ⚡ **One quick menu** (`Ctrl/Cmd+O`): jump to any note, create a note/task/idea, or run a command
 - ✍️ **Writing tools:** `/` command menu, autocomplete, formatting toolbar, auto-updating table of contents, LaTeX shortcuts, folder icons
 - 📄 **Files:** highlight and annotate PDFs, preview Word and Excel files, import docx/xlsx/pptx/pdf/csv as notes
-- 🔌 **MCP server:** give Claude Desktop, Claude Code or other MCP clients safe, read-mostly access to your vault
+- 🔌 **MCP server:** give Claude Desktop, Claude Code, Codex or other MCP clients safe, read-mostly access to your vault
 - 🔒 **Protected folders:** keep private folders completely out of the AI's reach
 - 🧪 Fictional **example notes** you can delete with one command
 
@@ -61,14 +61,15 @@ Setup pushes your vault and switches the Git plugin to automatic sync (commit + 
 | Python 3.8+ | the AI commands' helper script (`vault_tool.py`) |
 | [Git](https://git-scm.com) | version history (installed by setup on Windows; optional) |
 | Desktop Obsidian | the Second Brain Tools plugin (calendar, heatmap, quick menu, reminders, spreadsheet view, import); everything else also works on mobile |
-| [Claude Code](https://claude.com/claude-code) | the `/sb-*` AI commands (optional: the vault works without it) |
+| [Claude Code](https://claude.com/claude-code) | the `/sb-*` AI commands (optional) |
+| Codex (ChatGPT desktop) | the shared `sb-*` skills and project MCP server (optional) |
 
 ## First steps
 1. Open **Home**: dashboards, current tasks, pending decisions, the AI command list.
 2. Read **99 System/Second Brain Guide**: structure, metadata, board, commands, weekly routine.
 3. Look around the *example* notes (a fictional website project), then delete them:
    `python "99 System/scripts/vault_tool.py" clean-examples --yes`
-4. Open the folder in Claude Code and try `/sb-new project My Project`, `/sb-task`, `/sb-ask`.
+4. Open the folder in Claude Code or Codex and try `sb-new`, `sb-task`, or `sb-ask` (Claude: `/sb-*`; Codex: `$sb-*` or natural language).
 
 ## How it's organized
 Two areas with different layouts, plus a shared system:
@@ -116,14 +117,14 @@ Everything lives in `.obsidian/plugins/` with its settings, so it works right af
 
 The core **Slash commands** plugin is also on: type `/` at the start of a line to search every command (headings, tables, callouts, templates, TOC…). Details, choices and what was left out on purpose: *99 System/Second Brain Guide → Writing, navigation and tracking tools*.
 
-## AI commands (Claude Code skills)
-Open the vault in Claude Code and type `/sb-`. Definitions live in `.claude/skills/sb-*/SKILL.md`; the rules they all follow are in [`CLAUDE.md`](CLAUDE.md) (propose before writing, never edit raw sources, keep the areas apart, never touch protected folders, log every write). Most take `--scope personal|work|all`.
+## AI commands (Claude Code and Codex skills)
+Open the vault in Claude Code and type `/sb-`, or in Codex invoke `$sb-ask` or describe the task naturally. The 17 shared workflows live in `skills/sb-*/SKILL.md`; `.claude/skills/` and `.agents/skills/` contain product entrypoints. The rules they all follow are in [`CLAUDE.md`](CLAUDE.md), with Codex guidance in [`AGENTS.md`](AGENTS.md) (propose before writing, never edit raw sources, keep the areas apart, never touch protected folders, log every write). Most take `--scope personal|work|all`.
 
 | Command | Arguments | What it does |
 |---|---|---|
 | `/sb-ingest` | `<Inbox note \| URL \| text> [--yes]` `[--scope personal\|work\|all]` | Files a note/URL/text: decides its type, puts it in the right folder, adds reasoned links, updates the hub/MOC |
 | `/sb-inbox` | `[--yes]` `[--scope personal\|work\|all]` | Classifies everything in the inboxes (`Personal/00 Inbox`, `Work/00 Inbox`) and processes it within its area with one approval table |
-| `/sb-ask` | `<question> [--save]` `[--scope personal\|work\|all]` | Answers from your notes with citations; separates what the vault says from Claude's inference |
+| `/sb-ask` | `<question> [--save]` `[--scope personal\|work\|all]` | Answers from your notes with citations; separates what the vault says from the AI's inference |
 | `/sb-connect` | `<note name> [--yes]` `[--scope personal\|work\|all]` | Finds meaningful links for a note and adds them both ways, with relation type and reason |
 | `/sb-distill` | `<concept \| note name>` | Distills a concept into a knowledge note (`Personal/40 Knowledge`; work: `Work/40 Systems & APIs`) or updates a seed note |
 | `/sb-challenge` | `<note \| idea text> [--save]` | Red-teams an idea or decision: assumptions, weak points, counter-evidence, cheapest test |
@@ -142,8 +143,9 @@ Open the vault in Claude Code and type `/sb-`. Definitions live in `.claude/skil
 ## MCP server
 `99 System/scripts/vault_mcp.py`: Python standard library only, stdio. The MCP client starts it when needed.
 - **Claude Code:** defined in `.mcp.json` at the vault root (approve it the first time).
+- **Codex (ChatGPT desktop):** the same server is defined in `.codex/config.toml` for a trusted project. Open the vault root and start a new chat after adding the configuration.
 - **Claude Desktop:** add it to `claude_desktop_config.json` (example in the Guide).
-- Every tool takes `scope`: `personal`, `work` or `all` (reads default to all). Protected folders, `.obsidian/`, `.git/` and `.claude/` are invisible. Write tools only **create** new files, in the project's area (else the `scope`); they can't change, move or delete existing notes. Every write is logged to `99 System/Log.md`.
+- Every tool takes `scope`: `personal`, `work` or `all` (reads default to all). Protected folders, `.obsidian/`, `.git/`, `.claude/`, `.agents/`, `.codex/` and `skills/` are invisible. Write tools only **create** new files, in the project's area (else the `scope`); they can't change, move or delete existing notes. Every write is logged to `99 System/Log.md`.
 
 | Tool | Kind | Parameters | What it does |
 |---|---|---|---|
@@ -175,7 +177,7 @@ Open the vault in Claude Code and type `/sb-`. Definitions live in `.claude/skil
 
 ## Privacy
 - Your notes stay local; nothing in the template sends data anywhere.
-- AI commands run only when you call them in Claude Code; the MCP server runs only when an MCP client you configured starts it.
+- AI skills run only when you invoke them in Claude Code or Codex; the MCP server runs only when an MCP client you configured starts it.
 - Work and personal notes live in separate areas; commands only mix them when you ask for both.
 - List private folders under `"protected"` in `99 System/config.json` to exclude them from every command and the board.
 - If you keep your vault in Git, use a **private** repository.

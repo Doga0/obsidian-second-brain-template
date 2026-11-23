@@ -1,0 +1,4 @@
+# Loaded by Codex when this vault is trusted.
+[mcp_servers.second-brain]
+command = "python"
+args = ["-X", "utf8", "99 System/scripts/vault_mcp.py"]

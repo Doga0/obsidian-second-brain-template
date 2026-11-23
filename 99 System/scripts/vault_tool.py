@@ -105,14 +105,14 @@ def is_protected(p):
 def all_files():
     out = []
     for root, dirs, fs in os.walk("."):
-        dirs[:] = [d for d in dirs if not d.startswith(".")]
+        dirs[:] = [d for d in dirs if not d.startswith(".") and (root != "." or d != "skills")]
         for f in fs:
             out.append(os.path.normpath(os.path.join(root, f)).replace("\\", "/"))
     return out
 
 
 FILES = all_files()
-NOTES = sorted(f for f in FILES if f.endswith(".md") and not is_protected(f))
+NOTES = sorted(f for f in FILES if f.endswith(".md") and f != "AGENTS.md" and not is_protected(f))
 _cache = {}
 
 

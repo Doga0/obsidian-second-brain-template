@@ -6,9 +6,9 @@ type: system
 > [!info] This guide belongs to you: change it as you use the system. If the system doesn't fit you, change the system, not yourself.
 
 ## What this is
-An Obsidian vault structured as a "second brain", plus an AI layer that runs in **Claude Code**:
+An Obsidian vault structured as a "second brain", plus an AI layer that runs in **Claude Code or Codex**:
 - **Obsidian** is where you write, read, browse and approve: notes, hubs, maps, a kanban **board**, and dashboards built with Bases.
-- **Claude Code** is the engine: `/sb-*` commands file new material, find connections, answer questions from your notes, plan tasks and write reviews. It follows the rules in `CLAUDE.md`.
+- **Claude Code and Codex** provide the AI layer: `/sb-*` commands file new material, find connections, answer questions from your notes, plan tasks and write reviews. They follow the rules in `CLAUDE.md`.
 - **`vault_tool.py`** is a small dependency-free Python script the commands use for search, link checks, the index and task reports.
 
 It follows Karpathy's *LLM Wiki* pattern: raw sources stay untouched, the AI maintains the linked wiki around them, and one schema file (`CLAUDE.md`) is the contract.
@@ -41,7 +41,7 @@ The vault has two areas with different layouts; the shared system sits at the ro
 | `50 Tasks` | Work task cards | The board's *Work* area |
 | `60 Attachments` · `70 Analyses` · `90 Archive` | Files · work analyses · closed projects | |
 
-**At the root (shared):** `99 System` (this guide, templates, `Index`, `Log`, `Health`, `AI Queue`, `config.json`, `scripts/`), [[Home]], [[Board]], `CLAUDE.md`.
+**At the root (shared):** `99 System` (this guide, templates, `Index`, `Log`, `Health`, `AI Queue`, `config.json`, `scripts/`), [[Home]], [[Board]], `CLAUDE.md`, `AGENTS.md` and shared `skills/`.
 
 **Choosing an area (scope):** the *All areas / Personal / Work* menu on boards and the calendar; `--scope personal|work|all` in AI commands; `scope` in MCP tools. The default is both. New cards go to their project's area; new notes go to the open note's area.
 
@@ -126,7 +126,7 @@ filters: false             # hide the filter bar
 ````
 
 ## AI commands
-**Run them:** open this vault folder in Claude Code (the desktop app's Code tab, or run `claude` in a terminal inside the folder) and type `/sb-`; the commands are listed. Definitions live in `.claude/skills/sb-*/SKILL.md`. That folder is hidden in Obsidian; edit those files to change a command's behaviour, or ask Claude to ("add X to sb-review").
+**Run them:** open this vault folder in Claude Code (the desktop app's Code tab, or run `claude` in a terminal inside the folder) and type `/sb-`; the commands are listed. The shared definitions live in `skills/sb-*/SKILL.md`; Claude and Codex entrypoints live in `.claude/skills/` and `.agents/skills/`. In Codex, invoke `$sb-ask` or describe the task naturally. Edit the shared skill to change the workflow.
 
 | Pattern | In this vault |
 |---|---|

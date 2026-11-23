@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Second Brain MCP server (stdio, standard library only).
 
-Exposes this vault to MCP clients (Claude Desktop, Claude Code, other agents) with the same
+Exposes this vault to MCP clients (Claude Desktop, Claude Code, Codex, other agents) with the same
 rules as CLAUDE.md:
   - protected folders (99 System/config.json -> "protected") are invisible: not listed, searched or read
   - read tools: index, search, read_note, note_context, list_tasks, list_notes
@@ -23,7 +23,7 @@ def _protected():
 
 
 PROTECTED = _protected()
-HIDDEN = tuple(PROTECTED) + (".obsidian/", ".git/", ".claude/", ".trash/", "99 System/.integrity/")
+HIDDEN = tuple(PROTECTED) + (".obsidian/", ".git/", ".claude/", ".agents/", ".codex/", "skills/", ".trash/", "99 System/.integrity/")
 AREAS = {"personal": "Personal", "work": "Work"}
 FOLDERS = {"personal": {"inbox": "Personal/00 Inbox", "tasks": "Personal/15 Tasks"},
            "work": {"inbox": "Work/00 Inbox", "tasks": "Work/50 Tasks"}}
@@ -82,7 +82,7 @@ def all_notes():
         relroot = "" if relroot == "." else relroot + "/"
         dirs[:] = sorted(d for d in dirs if not d.startswith(".") and not blocked(relroot + d))
         for f in sorted(files):
-            if f.endswith(".md"):
+            if f.endswith(".md") and f != "AGENTS.md":
                 out.append(relroot + f)
     return out
 

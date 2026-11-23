@@ -1,6 +1,6 @@
 # Second Brain: AI operating contract
 
-Rules every AI agent (Claude Code) follows in this vault. Obsidian is the interface; the AI is the librarian, the user is the curator. Human guide: `99 System/Second Brain Guide.md`.
+Shared rules for Claude Code and Codex in this vault. Codex also reads AGENTS.md. Obsidian is the interface; the AI is the librarian, the user is the curator. Human guide: `99 System/Second Brain Guide.md`.
 
 ## 0. Hard rules
 1. **Protected folders are off-limits.** Folders listed under `"protected"` in `99 System/config.json` are never read, analyzed, linked, moved or written, and are excluded from search and analysis. The only exception is `vault_tool.py`, which hashes them for integrity checks.
@@ -13,7 +13,7 @@ Rules every AI agent (Claude Code) follows in this vault. Obsidian is the interf
 8. **Every link has a reason.** Write `[[Note]] — why it's related`. Don't add links without one. Don't target headings that contain `:`, `|`, `^`, `[`, `]`; link the note and write "§N" instead.
 
 ## 1. Structure
-The root holds only `Personal/`, `Work/`, the shared `99 System/` and `Home.md`, `Board.md`, `CLAUDE.md`, `README.md`.
+The root holds only `Personal/`, `Work/`, the shared `99 System/`, `skills/`, tool configuration folders and `Home.md`, `Board.md`, `CLAUDE.md`, `AGENTS.md`, `README.md`.
 
 **Personal/**
 | Folder | Contents |
@@ -77,7 +77,7 @@ python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx
 All of them take `--scope personal|work|all` (import defaults to personal; `--scope work` → `Work/00 Inbox` + `Work/60 Attachments`). `Index.md` is split into Personal / Work / Shared sections.
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
 MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scope`; protected folders are invisible; it only creates new notes/tasks, in the project's area).
-Retrieval order: `99 System/Index.md`, then `search`, then `Read` only the relevant line ranges. Don't read long source notes end to end.
+Retrieval order: `99 System/Index.md`, then `search`, then read only the relevant line ranges. Don't read long source notes end to end.
 
 ## 4. Note types
 Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Status · Decisions (embedded Base) · Open questions · Tasks (sb-board) · Experiment log · Related.
@@ -89,7 +89,7 @@ Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Sta
 - **Knowledge note**: created when a concept shows up in a second context; `status: seed`, at least 2 source links.
 
 ## 5. Commands
-`.claude/skills/sb-*`: `/sb-ingest`, `/sb-inbox`, `/sb-ask`, `/sb-lint`, `/sb-connect`, `/sb-distill`, `/sb-review`, `/sb-new`, `/sb-decide`, `/sb-experiment`, `/sb-challenge`, `/sb-emerge`, `/sb-brief`, `/sb-queue`, `/sb-task`, `/sb-plan`, `/sb-standup`. Overview: `99 System/Second Brain Guide.md`.
+Shared workflows live in `skills/sb-*`. Claude entrypoints in `.claude/skills/sb-*` and Codex entrypoints in `.agents/skills/sb-*` load them. Commands: `/sb-ingest`, `/sb-inbox`, `/sb-ask`, `/sb-lint`, `/sb-connect`, `/sb-distill`, `/sb-review`, `/sb-new`, `/sb-decide`, `/sb-experiment`, `/sb-challenge`, `/sb-emerge`, `/sb-brief`, `/sb-queue`, `/sb-task`, `/sb-plan`, `/sb-standup`. Overview: `99 System/Second Brain Guide.md`.
 
 ## 6. Language and style
 Reply in the user's language. Keep notes short and scannable: tables, bullets, link + reason.
