@@ -1,0 +1,65 @@
+{
+  "collapse-filter": true,
+  "search": "",
+  "showTags": false,
+  "showAttachments": false,
+  "hideUnresolved": false,
+  "showOrphans": true,
+  "collapse-color-groups": false,
+  "colorGroups": [
+    {
+      "query": "path:\"10 Maps\"",
+      "color": {
+        "a": 1,
+        "rgb": 15026253
+      }
+    },
+    {
+      "query": "path:\"20 Projects\"",
+      "color": {
+        "a": 1,
+        "rgb": 4088797
+      }
+    },
+    {
+      "query": "path:\"30 Research\"",
+      "color": {
+        "a": 1,
+        "rgb": 9326278
+      }
+    },
+    {
+      "query": "path:\"40 Knowledge\"",
+      "color": {
+        "a": 1,
+        "rgb": 3187820
+      }
+    },
+    {
+      "query": "path:\"50 Ideas\"",
+      "color": {
+        "a": 1,
+        "rgb": 16098596
+      }
+    },
+    {
+      "query": "path:\"15 Tasks\"",
+      "color": {
+        "a": 1,
+        "rgb": 9145752
+      }
+    }
+  ],
+  "collapse-display": true,
+  "showArrow": false,
+  "textFadeMultiplier": 0,
+  "nodeSizeMultiplier": 1,
+  "lineSizeMultiplier": 1,
+  "collapse-forces": true,
+  "centerStrength": 0.5,
+  "repelStrength": 10,
+  "linkStrength": 1,
+  "linkDistance": 250,
+  "scale": 1,
+  "close": true
+}

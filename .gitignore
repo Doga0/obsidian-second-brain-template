@@ -1,0 +1,16 @@
+# Obsidian per-device UI state
+.obsidian/workspace.json
+.obsidian/workspace-mobile.json
+.obsidian/cache
+.trash/
+
+# Device-local integrity baseline for protected folders (lists their file names)
+99 System/.integrity/
+
+# Add your protected / private folders here too, e.g.:
+# Private/
+
+# OS noise
+.DS_Store
+Thumbs.db
+desktop.ini

@@ -1,0 +1,39 @@
+{
+  "items": [
+    {
+      "type": "file",
+      "ctime": 1767225600000,
+      "path": "Home.md",
+      "title": "Home"
+    },
+    {
+      "type": "file",
+      "ctime": 1767225600000,
+      "path": "Board.md",
+      "title": "Board"
+    },
+    {
+      "type": "file",
+      "ctime": 1767225600000,
+      "path": "99 System/Second Brain Guide.md",
+      "title": "Guide"
+    },
+    {
+      "type": "file",
+      "ctime": 1767225600000,
+      "path": "99 System/AI Queue.md",
+      "title": "AI Queue"
+    },
+    {
+      "type": "file",
+      "ctime": 1767225600000,
+      "path": "99 System/Health.md",
+      "title": "Health"
+    },
+    {
+      "type": "folder",
+      "ctime": 1767225600000,
+      "path": "00 Inbox"
+    }
+  ]
+}

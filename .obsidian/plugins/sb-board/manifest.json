@@ -1,0 +1,9 @@
+{
+  "id": "sb-board",
+  "name": "Second Brain Board",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Kanban boards over notes: cards are notes, columns are a frontmatter property (status). Drag to move, quick add, progress tracking.",
+  "author": "obsidian-second-brain-template",
+  "isDesktopOnly": false
+}
