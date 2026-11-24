@@ -199,6 +199,9 @@ Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git a
   {"mcpServers": {"second-brain": {"command": "python", "args": ["-X", "utf8", "<path to vault>/99 System/scripts/vault_mcp.py"]}}}
   ```
   On macOS/Linux use `python3`; if Claude can't find Python, put the interpreter's full path in `command`.
+- **Skills over MCP.** The server also offers the `skills/sb-*` workflows as MCP *prompts*, so an agent without access to the vault files can still use `/sb-ask`, `/sb-brief` and the rest. In Claude Code: `/mcp__second-brain__sb-ask <question>`; in Claude Desktop pick them from the `+` menu under the server. Clients without prompt support use the `vault_skill` tool (no `name` = list).
+  - Each prompt starts with a short section that maps the skill's file and CLI steps to the MCP tools, plus the "Hard rules" section of CLAUDE.md.
+  - Limit: MCP can't change existing notes. Skills that edit notes (connect, distill, decide, experiment, inbox, ingest, lint, new, queue) do the analysis and present the change as a plan ready to apply; it is applied in Obsidian or by an agent with file access.
 - **Project lock (give an agent only some projects).** Start the server with `--project "<Hub name>"` (repeat it for several, or set `SB_PROJECTS="A;B"`). The agent then doesn't waste context on, or get confused by, other projects:
   - Visible: the project's hub folder, its task folder (`15 Tasks/<Project>`, `50 Tasks/<Project>`) and notes whose `project:` is that hub. Add `--include-linked` to also see notes the hub links to directly that belong to no other project (e.g. knowledge notes; MOCs and analyses stay out).
   - `vault_index` lists only those notes; `vault_search`, `vault_list_*` and `vault_note_context` are filtered; any other note is "not found"; `vault_create_task` only creates cards for the locked projects.

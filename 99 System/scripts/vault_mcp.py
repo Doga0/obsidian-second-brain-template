@@ -8,6 +8,9 @@ rules as CLAUDE.md:
   - write tools only CREATE new notes (capture to 00 Inbox, task cards in 15 Tasks/<Project>);
     they never overwrite, edit, move or delete, and every write is logged to 99 System/Log.md
 
+  - prompts: every skills/sb-*/SKILL.md is served as an MCP prompt (slash command in clients), with a preamble
+    that maps file/CLI steps to these tools; vault_skill returns the same text for clients without prompts
+
 Run:  python -X utf8 "99 System/scripts/vault_mcp.py"
 
 Project lock (optional): an agent can be limited to one or more projects:
@@ -98,7 +101,7 @@ def find(name, scope="all"):
     name = str(name).strip()
     ok = allowed_notes()
     full, rel = safe_path(name)
-    if os.path.isfile(full) and (ok is None or rel in ok):
+    if os.path.isfile(full) and (ok is None or rel in ok or rel == "CLAUDE.md"):  # vault rules stay readable under a lock
         return rel
     base = name.split("/")[-1]
     base = base[:-3] if base.endswith(".md") else base
@@ -392,6 +395,116 @@ def t_task(a):
 
 
 STR, INT = {"type": "string"}, {"type": "integer"}
+# ------------------------------------------------------------------ skills as MCP prompts
+SKILLS = os.path.join(VAULT, "skills")
+CLAUDE_SKILLS = os.path.join(VAULT, ".claude", "skills")
+# skills whose main job is changing existing notes; over MCP they can only propose the change
+EDITING = {"sb-connect", "sb-distill", "sb-decide", "sb-experiment", "sb-inbox", "sb-ingest", "sb-lint", "sb-new", "sb-queue"}
+MCP_PREAMBLE = """## You are running this workflow over MCP
+The skill below was written for agents with direct access to the vault files. You reach the vault only through the `second-brain` MCP tools. Map the steps like this:
+
+| In the skill | Over MCP |
+|---|---|
+| read `99 System/Index.md` | `vault_index` |
+| `vault_tool.py search` | `vault_search` (then read the relevant sections with `vault_read_note` + offset/limit) |
+| `vault_tool.py context` | `vault_note_context` |
+| `vault_tool.py tasks [--project X]` | `vault_list_tasks` (`project`) |
+| the file-reading tool | `vault_read_note` |
+| a new task card | `vault_create_task` |
+| a new note in the inbox | `vault_capture` |
+| `--scope` | the tools' `scope` parameter |
+
+**Not available over MCP:** editing, moving, renaming or deleting an existing note, `git mv`, `vault_tool.py lint / index / log / import`, writing new notes outside the inbox. When the skill asks for one of these, **do not pretend you did it**: show the change ready to apply (file path, which section, the text to add or change) and tell the user it has to be applied in Obsidian or by an agent with file access. MCP's create tools write the log themselves. Full vault rules: `vault_read_note` path=`CLAUDE.md`.
+"""
+
+
+def skill_names():
+    try:
+        return sorted(d for d in os.listdir(SKILLS) if os.path.isfile(os.path.join(SKILLS, d, "SKILL.md")))
+    except OSError:
+        return []
+
+
+def skill_meta(path):
+    """(frontmatter dict of simple `key: value` lines, body) of a SKILL.md."""
+    try:
+        text = open(path, encoding="utf-8").read()
+    except OSError:
+        return {}, ""
+    m = FM_RE.match(text)
+    meta = {}
+    if m:
+        for line in m.group(1).splitlines():
+            k, _, v = line.partition(":")
+            v = v.strip()
+            if v.startswith('"') and v.endswith('"'):
+                try:
+                    v = json.loads(v)
+                except ValueError:
+                    v = v[1:-1]
+            if v:
+                meta[k.strip()] = v
+    return meta, (text[m.end():] if m else text).strip()
+
+
+def core_rules():
+    """Section 0 of CLAUDE.md (the hard rules), so a file-less agent still follows them."""
+    try:
+        text = open(os.path.join(VAULT, "CLAUDE.md"), encoding="utf-8").read()
+    except OSError:
+        return ""
+    m = re.search(r"(?ms)^## 0\..*?(?=^## )", text)
+    return m.group(0).strip() if m else ""
+
+
+def skill_prompt(name, args=""):
+    if name not in skill_names():
+        raise LookupError(f"unknown skill: {name}")
+    meta, body = skill_meta(os.path.join(SKILLS, name, "SKILL.md"))
+    parts = [MCP_PREAMBLE]
+    if name in EDITING:
+        parts.append("> This skill mostly changes existing notes: over MCP, do the analysis and proposal part and present the changes as a plan ready for approval.\n")
+    if LOCK["projects"]:
+        parts.append(f"> This server is locked to these projects: {', '.join(LOCK['projects'])}. Do not look for other projects.\n")
+    rules = core_rules()
+    if rules:
+        parts.append(rules + "\n")
+    parts += [f"---\n# Skill: /{name}\n", body, "\n## User input\n", str(args).strip() or "(no input)"]
+    return meta.get("description", ""), "\n".join(parts)
+
+
+# Some clients (Claude Code) split the slash-command text on spaces and hand the words to the declared
+# arguments in order; continuation slots keep the rest of the sentence instead of dropping it.
+CONT_N = 30
+CONT_ARGS = [{"name": f"w{i}", "description": "(rest of the input; leave empty)", "required": False} for i in range(2, CONT_N + 1)]
+
+
+def joined_args(argmap):
+    argmap = argmap or {}
+    words = [str(argmap.get("args", "") or "")] + [str(argmap.get(f"w{i}", "") or "") for i in range(2, CONT_N + 1)]
+    return " ".join(w for w in words if w.strip())
+
+
+def prompt_list():
+    out = []
+    for n in skill_names():
+        meta, _ = skill_meta(os.path.join(SKILLS, n, "SKILL.md"))
+        hint, _ = skill_meta(os.path.join(CLAUDE_SKILLS, n, "SKILL.md"))
+        desc = meta.get("description", "")
+        if n in EDITING:
+            desc += " (MCP: cannot change existing notes; proposes the change instead.)"
+        out.append({"name": n, "description": desc,
+                    "arguments": [{"name": "args", "description": hint.get("argument-hint", "Command input"), "required": False}] + CONT_ARGS})
+    return out
+
+
+def t_skill(a):
+    name = str(a.get("name", "")).strip().lstrip("/")
+    if not name:
+        return "\n".join(f"/{p['name']} — {p['arguments'][0]['description']}" for p in prompt_list()) or "(no skills)"
+    return skill_prompt(name, a.get("args", ""))[1]
+
+
 SCOPE_PROP = {"type": "string", "enum": ["personal", "work", "all"],
               "description": "Area: personal (Personal/), work (Work/) or all. Reads default to all."}
 S = lambda props, req=(): {"type": "object", "properties": dict(props, scope=SCOPE_PROP), "required": list(req)}
@@ -402,6 +515,7 @@ TOOLS = {
     "vault_note_context": (t_context, "Frontmatter, heading outline, outgoing links and backlinks of a note.", S({"note": STR}, ["note"]), True),
     "vault_list_tasks": (t_tasks, "Board task cards (JSON): area, status, priority, dates, project. Filter with project and scope.", S({"project": STR}), True),
     "vault_list_notes": (t_list, "List of note files; narrow it with folder and scope.", S({"folder": STR}), True),
+    "vault_skill": (t_skill, "Second Brain workflows (/sb-ask, /sb-brief, /sb-task …): with no name, lists them; with a name, returns that skill's instructions adapted for MCP, which you then follow. args: the command input. For clients without MCP prompts.", {"type": "object", "properties": {"name": STR, "args": STR}, "required": []}, True),
     "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox.", S({"title": STR, "content": STR, "source": STR}, ["title", "content"]), False),
     "vault_create_task": (t_task, "Writes a NEW task card (status: todo) to Work/50 Tasks/<Project> or Personal/15 Tasks/<Project> (folder root without a project): by scope, else the project's area, else personal. priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
 }
@@ -411,7 +525,7 @@ def handle(msg):
     method, mid = msg.get("method"), msg.get("id")
     if method == "initialize":
         ver = (msg.get("params") or {}).get("protocolVersion") or PROTOCOL
-        return {"protocolVersion": ver, "capabilities": {"tools": {"listChanged": False}},
+        return {"protocolVersion": ver, "capabilities": {"tools": {"listChanged": False}, "prompts": {"listChanged": False}},
                 "serverInfo": {"name": "second-brain", "version": "1.0.0"},
                 "instructions": "An Obsidian vault with two areas, Personal/ and Work/ (scope: personal | work | all). Start with vault_index, then vault_search and vault_read_note. "
                                 "Write tools only create new notes/tasks; do not write unless the user asks." +
@@ -419,6 +533,12 @@ def handle(msg):
                                   ". Other projects, tasks and notes are not visible; do not look for them.") if LOCK["projects"] else "")}
     if method == "ping":
         return {}
+    if method == "prompts/list":
+        return {"prompts": prompt_list()}
+    if method == "prompts/get":
+        p = msg.get("params") or {}
+        desc, text = skill_prompt(str(p.get("name", "")), joined_args(p.get("arguments")))
+        return {"description": desc, "messages": [{"role": "user", "content": {"type": "text", "text": text}}]}
     if method == "tools/list":
         return {"tools": [{"name": n, "description": d, "inputSchema": s, "annotations": {"readOnlyHint": ro, "destructiveHint": False}}
                           for n, (_, d, s, ro) in TOOLS.items()]}
