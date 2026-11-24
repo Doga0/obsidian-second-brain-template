@@ -4,7 +4,7 @@ description: "Second Brain — Create, update or move task cards on the board. C
 ---
 # /sb-task
 
-Task cards are notes in `Personal/15 Tasks/` and `Work/50 Tasks/` (`type: task`). A card goes to its project's area; without a project use `--scope` or the content (work → Work), and ask if unsure. The schema is in `CLAUDE.md`.
+Task cards are notes in `Personal/15 Tasks/<Project>/` and `Work/50 Tasks/<Project>/` (`type: task`; folder name = `project` name, cards without a project in the folder root). A card goes to its project's area and folder; if you change `project`, move the file to the new project folder too (`git mv`); without a project use `--scope` or the content (work → Work), and ask if unsure. The schema is in `CLAUDE.md`.
 
 ## New task(s)
 1. Extract tasks from the text. Each gets an **actionable title** (verb + object, ≤ 60 characters, valid as a file name: no `\ / : * ? " < > | # ^ [ ]`).

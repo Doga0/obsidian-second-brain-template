@@ -77,7 +77,7 @@ Two areas with different layouts, plus a shared system:
 Personal/
   00 Inbox/        new notes land here
   10 Maps/         maps of content (MOC - <Area>)
-  15 Tasks/        task cards for the board
+  15 Tasks/        task cards for the board, one subfolder per project
   20 Projects/     <Project>/<Project>.md hub + notes + decisions
   30 Research/     <Research>/<Research>.md hub + experiments
   40 Knowledge/    evergreen concept notes
@@ -92,7 +92,7 @@ Work/
   20 Meetings/     YYYY-MM-DD - Organization - Topic
   30 Organizations & People/   client, vendor and people cards
   40 Systems & APIs/           external systems and APIs
-  50 Tasks/        work task cards
+  50 Tasks/        work task cards, one subfolder per project
   60 Attachments/ · 70 Analyses/ · 90 Archive/
 99 System/         guide, templates, index, log, health, AI queue, config, scripts
 Home.md · Board.md · CLAUDE.md (AI contract)
@@ -156,7 +156,7 @@ Open the vault in Claude Code and type `/sb-`, or in Codex invoke `$sb-ask` or d
 | `vault_list_tasks` | read | `project`, `scope` | Board cards as JSON: area, status, priority, dates, subtask count |
 | `vault_list_notes` | read | `folder`, `scope` | List of note files, optionally limited to a folder |
 | `vault_capture` | create | `title`, `content`, `source`, `scope` | Writes a new note to the area's inbox (`Personal/00 Inbox` or `Work/00 Inbox`) |
-| `vault_create_task` | create | `title`, `project`, `priority`, `due`, `description`, `subtasks`, `scope` | Writes a new `status: todo` task card to `Personal/15 Tasks` or `Work/50 Tasks` |
+| `vault_create_task` | create | `title`, `project`, `priority`, `due`, `description`, `subtasks`, `scope` | Writes a new `status: todo` task card to `Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/` |
 
 ## Helper script
 `python "99 System/scripts/vault_tool.py" <command>`: the deterministic tool behind the AI commands and plugins (add `-X utf8` after `python` on Windows). Every command takes `--scope personal|work|all`.

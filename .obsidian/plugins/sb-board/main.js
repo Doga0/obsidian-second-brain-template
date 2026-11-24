@@ -460,6 +460,72 @@ class SbBoardPlugin extends Plugin {
     this.addCommand({ id: 'open-board', name: 'Open board', callback: () => this.openBoard() });
     this.addCommand({ id: 'quick-add-task', name: 'Quick add task', callback: () => this.quickAdd('task') });
     this.addCommand({ id: 'quick-add-idea', name: 'Quick add idea', callback: () => this.quickAdd('idea') });
+    // Task cards live in <tasks>/<Project>/; when a card's `project` changes, move it to the matching folder.
+    this.relocateTimers = new Map();
+    this.registerEvent(this.app.metadataCache.on('changed', (file) => this.scheduleRelocate(file)));
+    this.addCommand({ id: 'sort-task-folders', name: 'Sort task cards into project folders', callback: () => this.relocateAll() });
+  }
+
+  onunload() {
+    for (const t of (this.relocateTimers || new Map()).values()) window.clearTimeout(t);
+  }
+
+  taskRootOf(path) {
+    for (const k of Object.keys(AREAS)) if (path.startsWith(AREAS[k].tasks + '/')) return k;
+    return '';
+  }
+
+  taskFolder(area, project) {
+    const root = AREAS[area].tasks;
+    const name = project ? sanitizeName(project) : '';
+    return name ? `${root}/${name}` : root;
+  }
+
+  expectedTaskFolder(file) {
+    const area = this.taskRootOf(file.path);
+    if (!area) return null; // only cards inside a tasks folder are managed
+    const fm = (this.app.metadataCache.getFileCache(file) || {}).frontmatter || {};
+    if (fm.type !== 'task') return null;
+    const project = linkName(fm.project);
+    return this.taskFolder(this.projectArea(project) || area, project);
+  }
+
+  scheduleRelocate(file) {
+    if (!(file instanceof TFile) || file.extension !== 'md' || !this.taskRootOf(file.path)) return;
+    const prev = this.relocateTimers.get(file.path);
+    if (prev) window.clearTimeout(prev);
+    // wait until typing in the properties panel settles
+    this.relocateTimers.set(file.path, window.setTimeout(() => {
+      this.relocateTimers.delete(file.path);
+      this.relocate(file).catch((e) => console.error('sb-board relocate', e));
+    }, 2000));
+  }
+
+  async relocate(file) {
+    if (!this.app.vault.getAbstractFileByPath(file.path)) return false;
+    const folder = this.expectedTaskFolder(file);
+    if (folder === null || (file.parent && file.parent.path === folder)) return false;
+    if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder).catch(() => {});
+    let path = normalizePath(`${folder}/${file.name}`);
+    let n = 2;
+    while (this.app.vault.getAbstractFileByPath(path)) path = normalizePath(`${folder}/${file.basename} (${n++}).md`);
+    const from = file.parent ? file.parent.path : '';
+    await this.app.fileManager.renameFile(file, path);
+    await this.removeIfEmpty(from);
+    return true;
+  }
+
+  async removeIfEmpty(folderPath) {
+    const f = this.app.vault.getAbstractFileByPath(folderPath);
+    if (!f || f instanceof TFile || !this.taskRootOf(folderPath + '/x')) return;
+    if (Object.values(AREAS).some((a) => a.tasks === folderPath)) return; // never remove the area roots
+    if (f.children && f.children.length === 0) await this.app.vault.delete(f, true).catch(() => {});
+  }
+
+  async relocateAll() {
+    let moved = 0;
+    for (const f of this.app.vault.getMarkdownFiles()) if (this.taskRootOf(f.path) && (await this.relocate(f))) moved++;
+    new Notice(moved ? `${moved} card(s) moved to their project folder.` : 'All cards are already in the right folder.');
   }
 
   async loadVaultConfig() {
@@ -539,7 +605,7 @@ class SbBoardPlugin extends Plugin {
 
   async createCard(type, v) {
     const area = this.projectArea(v.project) || v.area || 'personal';
-    const folder = type === 'idea' ? AREAS[area].ideas : AREAS[area].tasks;
+    const folder = type === 'idea' ? AREAS[area].ideas : this.taskFolder(area, v.project);
     if (!this.app.vault.getAbstractFileByPath(folder)) await this.app.vault.createFolder(folder).catch(() => {});
     const base = sanitizeName(v.title) || 'New card';
     let path = normalizePath(`${folder}/${base}.md`);

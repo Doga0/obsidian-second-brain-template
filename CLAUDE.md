@@ -20,7 +20,7 @@ The root holds only `Personal/`, `Work/`, the shared `99 System/`, `skills/`, to
 |---|---|
 | `Personal/00 Inbox` | New, unprocessed notes (no metadata required) |
 | `Personal/10 Maps` | Maps of content, named `MOC - <Area>` |
-| `Personal/15 Tasks` | Task cards (`type: task`), flat; linked to a project via `project` |
+| `Personal/15 Tasks/<Project>/` | Task cards (`type: task`); each project has its own subfolder (same name as `project`), cards without a project sit in the root |
 | `Personal/20 Projects/<Name>/` | Project folder + hub with the same name (`<Name>.md`), source notes, `Decision - …` notes |
 | `Personal/30 Research/<Name>/` | Research folder + hub, experiment files |
 | `Personal/40 Knowledge` | Evergreen concept notes (flat) |
@@ -38,7 +38,7 @@ The root holds only `Personal/`, `Work/`, the shared `99 System/`, `skills/`, to
 | `Work/20 Meetings` | `type: meeting`; named `YYYY-MM-DD - Organization - Topic` (no date if unknown) |
 | `Work/30 Organizations & People` | `type: org` cards for clients, vendors and people |
 | `Work/40 Systems & APIs` | External systems, APIs, reusable technical knowledge (`type: resource`) |
-| `Work/50 Tasks` | Work task cards |
+| `Work/50 Tasks/<Project>/` | Work task cards (in project subfolders) |
 | `Work/60 Attachments` · `Work/70 Analyses` · `Work/90 Archive` | Files · work analyses · closed projects |
 
 **99 System** (shared): Guide, Templates, `Index.md`, `Log.md`, `Health.md`, `AI Queue.md`, `config.json`, `scripts/`.
@@ -81,7 +81,7 @@ Retrieval order: `99 System/Index.md`, then `search`, then read only the relevan
 
 ## 4. Note types
 Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Status · Decisions (embedded Base) · Open questions · Tasks (sb-board) · Experiment log · Related.
-- **Task card** (`Personal/15 Tasks/` or `Work/50 Tasks/<short title>.md`, by the project's area): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.
+- **Task card** (`Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/<short title>.md`, by the project's area; folder root without a project. When a card's `project` changes, the board plugin moves it to the new project folder): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.
 - **Decision note** (Personal: `Decision - <short name>.md`; Work: `ADR-NNN - <short name>.md`; in the hub folder): `type: decision`, `project`, `status`, `origin`, `decided` (only if known); body: Decision · Rationale · Source · Alternatives.
 - **Analysis note** (`Personal/70 Analyses/` or `Work/70 Analyses/<YYYY-MM-DD> - <title>.md`): `type: analysis`, `source` names the command that produced it; cite a `[[note]]` for every claim.
 - **Meeting note** (Work): `type: meeting`, `project`; body: Notes · Decisions · Action items (action items can become task cards).

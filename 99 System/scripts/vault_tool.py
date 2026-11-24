@@ -637,7 +637,7 @@ def cmd_clean_examples(yes=False):
         FILES.remove(n)
         _cache.pop(n, None)
     for d in sorted({os.path.dirname(n) for n in ex}, key=len, reverse=True):
-        if d and os.path.isdir(d) and not os.listdir(d) and d.startswith(("Personal/20 Projects/", "Personal/30 Research/", "Work/10 Projects/")):
+        if d and os.path.isdir(d) and not os.listdir(d) and d.startswith(("Personal/20 Projects/", "Personal/30 Research/", "Work/10 Projects/", "Personal/15 Tasks/", "Work/50 Tasks/")):
             os.rmdir(d)
     cmd_log("clean-examples", f"{len(ex)} example notes deleted")
     cmd_index()

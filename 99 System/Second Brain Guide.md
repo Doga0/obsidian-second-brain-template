@@ -21,7 +21,7 @@ The vault has two areas with different layouts; the shared system sits at the ro
 |---|---|---|
 | `00 Inbox` | Every new personal note | Write without thinking; empty it weekly |
 | `10 Maps` | Maps of content (MOCs) | One per area; curated by hand |
-| `15 Tasks` | Task cards (board) | Flat; linked to projects through `project` |
+| `15 Tasks` | Task cards (board) | `15 Tasks/<Project>/<card>`; the folder comes from `project`, cards without a project sit in the root |
 | `20 Projects` | Work with an outcome and an end | **One folder + a hub with the same name** per project |
 | `30 Research` | Academic or technical research, experiments | Same layout as projects; hub has an Experiment log |
 | `40 Knowledge` | Evergreen concept notes | **Flat**, no subfolders |
@@ -38,7 +38,7 @@ The vault has two areas with different layouts; the shared system sits at the ro
 | `20 Meetings` | Meeting notes (`Meeting` template) | Name: `YYYY-MM-DD - Organization - Topic`; action items can become task cards |
 | `30 Organizations & People` | Client, vendor and people cards (`Org` template) | Meetings and projects link here |
 | `40 Systems & APIs` | External systems, APIs, reusable technical knowledge | The "knowledge" layer of work |
-| `50 Tasks` | Work task cards | The board's *Work* area |
+| `50 Tasks` | Work task cards | `50 Tasks/<Project>/<card>`; the board's *Work* area |
 | `60 Attachments` · `70 Analyses` · `90 Archive` | Files · work analyses · closed projects | |
 
 **At the root (shared):** `99 System` (this guide, templates, `Index`, `Log`, `Health`, `AI Queue`, `config.json`, `scripts/`), [[Home]], [[Board]], `CLAUDE.md`, `AGENTS.md` and shared `skills/`.
@@ -107,7 +107,7 @@ Trello/Jira-style management through the bundled **Second Brain Board** plugin (
 | Each hub's Tasks section | That project's cards only |
 
 - **Move:** drag and drop, or right-click → *Move →*. Moving to `doing` writes `started`, moving to `done` writes `completed`; progress reports use these dates.
-- **Add:** the column's `+`, or `Ctrl/Cmd+P` → *Quick add task* (the open note's project is preselected). Cards go to the project's area: `Personal/15 Tasks/` or `Work/50 Tasks/`.
+- **Add:** the column's `+`, or `Ctrl/Cmd+P` → *Quick add task* (the open note's project is preselected). Cards go to the project's area and folder: `Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/`. Change a card's `project` and it moves to the new project folder within a few seconds; to fix by hand, `Ctrl/Cmd+P` → *Sort task cards into project folders*.
 - **Card details:** click the card. Description, **subtasks** (a checklist, shown as `☑ 2/5` on the card), notes. Hover for a preview.
 - **Priority / due date:** right-click → *Priority*; set `due` in the card's Properties. Overdue dates turn red, dates within 3 days orange.
 - **Send to AI:** right-click → *Send to AI queue: brief / challenge / connect…*, then `/sb-queue`.

@@ -465,7 +465,7 @@ class QuickMenu extends SuggestModal {
       const label = { note: 'New note', task: 'New task', idea: 'New idea' }[item.what];
       const ar = AREAS[item.area || 'personal'];
       body.createDiv({ text: (item.title ? `${label}: ${item.title}` : `${label}…`) + ` · ${ar.label}` });
-      body.createDiv({ cls: 'sbt-qm-sub', text: { note: ar.inbox, task: ar.tasks + ' · board', idea: ar.ideas + ' · board' }[item.what] });
+      body.createDiv({ cls: 'sbt-qm-sub', text: { note: ar.inbox, task: ar.tasks + '/<project> · board', idea: ar.ideas + ' · board' }[item.what] });
     } else if (item.kind === 'file') {
       body.createDiv({ text: item.title + (item.alias ? `  ← ${item.alias}` : '') });
       const sub = item.file.parent && item.file.parent.path !== '/' ? item.file.parent.path : '';

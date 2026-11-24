@@ -5,7 +5,7 @@ Exposes this vault to MCP clients (Claude Desktop, Claude Code, Codex, other age
 rules as CLAUDE.md:
   - protected folders (99 System/config.json -> "protected") are invisible: not listed, searched or read
   - read tools: index, search, read_note, note_context, list_tasks, list_notes
-  - write tools only CREATE new notes (capture to 00 Inbox, task cards in 15 Tasks);
+  - write tools only CREATE new notes (capture to 00 Inbox, task cards in 15 Tasks/<Project>);
     they never overwrite, edit, move or delete, and every write is logged to 99 System/Log.md
 
 Run:  python -X utf8 "99 System/scripts/vault_mcp.py"
@@ -217,7 +217,10 @@ def t_task(a):
     fm += [f"created: {datetime.date.today().isoformat()}", "---"]
     subs = [f"- [ ] {s}" for s in a.get("subtasks", []) or []] or ["- [ ] "]
     body = [f"# {title}", "", "## Description", str(a.get("description", "")).strip(), "", "## Subtasks", *subs, "", "## Notes", ""]
-    p = unique(FOLDERS[write_area(a)]["tasks"], title)
+    folder = FOLDERS[write_area(a)]["tasks"]
+    if a.get("project"):
+        folder = folder + "/" + clean_name(a["project"])  # cards live in <tasks>/<Project>/
+    p = unique(folder, title)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(fm + body))
@@ -238,7 +241,7 @@ TOOLS = {
     "vault_list_tasks": (t_tasks, "Board task cards (JSON): area, status, priority, dates, project. Filter with project and scope.", S({"project": STR}), True),
     "vault_list_notes": (t_list, "List of note files; narrow it with folder and scope.", S({"folder": STR}), True),
     "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox.", S({"title": STR, "content": STR, "source": STR}, ["title", "content"]), False),
-    "vault_create_task": (t_task, "Writes a NEW task card (status: todo) to Work/50 Tasks or Personal/15 Tasks: by scope, else the project's area, else personal. priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
+    "vault_create_task": (t_task, "Writes a NEW task card (status: todo) to Work/50 Tasks/<Project> or Personal/15 Tasks/<Project> (folder root without a project): by scope, else the project's area, else personal. priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
 }
 
 
