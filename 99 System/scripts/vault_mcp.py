@@ -346,11 +346,18 @@ def write_area(a):
 def t_capture(a):
     title = clean_name(a.get("title", "")) or "Captured note"
     content = str(a.get("content", "")).rstrip()
+    if LOCK["projects"]:  # under a lock the note is tied to a locked project, so the agent can read it back
+        if not a.get("project"):
+            if len(LOCK["projects"]) > 1:
+                raise ValueError("project is required: " + ", ".join(LOCK["projects"]))
+            a = dict(a, project=LOCK["projects"][0])
+        check_project(a["project"])
     p = unique(FOLDERS[write_area(a)]["inbox"], title)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     today = datetime.date.today().isoformat()
     src = str(a.get("source", "")).replace('"', "'").strip()
-    fm = ["---", f"created: {today}"] + ([f'source: "{src}"'] if src else []) + ["---"]
+    proj = [f'project: "[[{clean_name(a["project"])}]]"'] if a.get("project") else []
+    fm = ["---", f"created: {today}"] + proj + ([f'source: "{src}"'] if src else []) + ["---"]
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(fm + [f"# {a.get('title') or title}", "", content, ""]))
     rel = os.path.relpath(p, VAULT).replace("\\", "/")
@@ -516,7 +523,7 @@ TOOLS = {
     "vault_list_tasks": (t_tasks, "Board task cards (JSON): area, status, priority, dates, project. Filter with project and scope.", S({"project": STR}), True),
     "vault_list_notes": (t_list, "List of note files; narrow it with folder and scope.", S({"folder": STR}), True),
     "vault_skill": (t_skill, "Second Brain workflows (/sb-ask, /sb-brief, /sb-task …): with no name, lists them; with a name, returns that skill's instructions adapted for MCP, which you then follow. args: the command input. For clients without MCP prompts.", {"type": "object", "properties": {"name": STR, "args": STR}, "required": []}, True),
-    "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox.", S({"title": STR, "content": STR, "source": STR}, ["title", "content"]), False),
+    "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox. project, if given, is written to the note's `project` field (required/automatic under a project lock).", S({"title": STR, "content": STR, "source": STR, "project": STR}, ["title", "content"]), False),
     "vault_create_task": (t_task, "Writes a NEW task card (status: todo) to Work/50 Tasks/<Project> or Personal/15 Tasks/<Project> (folder root without a project): by scope, else the project's area, else personal. priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
 }
 
