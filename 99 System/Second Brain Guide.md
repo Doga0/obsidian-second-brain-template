@@ -199,6 +199,12 @@ Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git a
   {"mcpServers": {"second-brain": {"command": "python", "args": ["-X", "utf8", "<path to vault>/99 System/scripts/vault_mcp.py"]}}}
   ```
   On macOS/Linux use `python3`; if Claude can't find Python, put the interpreter's full path in `command`.
+- **Project lock (give an agent only some projects).** Start the server with `--project "<Hub name>"` (repeat it for several, or set `SB_PROJECTS="A;B"`). The agent then doesn't waste context on, or get confused by, other projects:
+  - Visible: the project's hub folder, its task folder (`15 Tasks/<Project>`, `50 Tasks/<Project>`) and notes whose `project:` is that hub. Add `--include-linked` to also see notes the hub links to directly that belong to no other project (e.g. knowledge notes; MOCs and analyses stay out).
+  - `vault_index` lists only those notes; `vault_search`, `vault_list_*` and `vault_note_context` are filtered; any other note is "not found"; `vault_create_task` only creates cards for the locked projects.
+  - Example server entry: `"sb-website": {"command": "python", "args": ["-X", "utf8", "99 System/scripts/vault_mcp.py", "--project", "Website Redesign"]}`.
+  - **Full isolation in Claude Code:** the lock only covers MCP; Claude Code's own file tools can still read the vault. Start the locked agent with only that server and those tools off:
+    `claude --mcp-config sb-website.json --strict-mcp-config --disallowedTools "Read,Grep,Glob,Bash,Edit,Write"`
 
 **Deliberate choices:**
 - *Editing Toolbar* instead of *Markdown Formatting Assistant*: same job (formatting buttons), more widely used and maintained.

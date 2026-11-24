@@ -9,6 +9,13 @@ rules as CLAUDE.md:
     they never overwrite, edit, move or delete, and every write is logged to 99 System/Log.md
 
 Run:  python -X utf8 "99 System/scripts/vault_mcp.py"
+
+Project lock (optional): an agent can be limited to one or more projects:
+  python -X utf8 "99 System/scripts/vault_mcp.py" --project "My Project" [--project "Other"] [--include-linked]
+  (or env SB_PROJECTS="A;B"). In this mode every tool only sees the project's hub folder, its task folder
+  (15 Tasks/<Project> / 50 Tasks/<Project>) and notes whose `project` is that hub; --include-linked also
+  admits notes the hub links to directly unless they belong to another project. Anything else is
+  "not found" / filtered out, and new tasks can only be created for the locked projects.
 """
 import datetime, json, os, re, subprocess, sys
 
@@ -89,20 +96,102 @@ def all_notes():
 
 def find(name, scope="all"):
     name = str(name).strip()
-    try:
-        full, rel = safe_path(name)
-        if os.path.isfile(full):
-            return rel
-    except PermissionError:
-        raise
+    ok = allowed_notes()
+    full, rel = safe_path(name)
+    if os.path.isfile(full) and (ok is None or rel in ok):
+        return rel
     base = name.split("/")[-1]
     base = base[:-3] if base.endswith(".md") else base
-    hits = [n for n in all_notes() if os.path.basename(n)[:-3].lower() == base.lower() and (scope == "all" or area_of(n) == scope)]
+    pool = all_notes() if ok is None else sorted(ok)
+    hits = [n for n in pool if os.path.basename(n)[:-3].lower() == base.lower() and (scope == "all" or area_of(n) == scope)]
     if len(hits) == 1:
         return hits[0]
     if len(hits) > 1:
         raise ValueError("several notes match: " + ", ".join(hits))
     raise FileNotFoundError("note not found: " + name)
+
+
+# ------------------------------------------------------------------ project lock
+LOCK = {"projects": [], "linked": False}
+FM_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---", re.S)
+LINK_RE = re.compile(r"\[\[([^\]|#^]+)")
+
+
+def parse_args(argv):
+    projects, linked, i = [], False, 0
+    while i < len(argv):
+        if argv[i] == "--project" and i + 1 < len(argv):
+            projects += re.split(r"[;,]", argv[i + 1]); i += 2; continue
+        if argv[i] == "--include-linked":
+            linked = True
+        i += 1
+    projects += re.split(r"[;,]", os.environ.get("SB_PROJECTS", ""))
+    LOCK["projects"] = list(dict.fromkeys(clean_name(p) for p in projects if p.strip()))
+    LOCK["linked"] = linked or os.environ.get("SB_INCLUDE_LINKED", "") in ("1", "true", "yes")
+
+
+def head_of(rel):
+    try:
+        with open(os.path.join(VAULT, rel), encoding="utf-8", errors="replace") as fh:
+            text = fh.read(4000)
+    except OSError:
+        return "", ""
+    m = FM_RE.match(text)
+    fm = m.group(1) if m else ""
+    t = re.search(r"(?m)^type:\s*\"?([\w-]+)", fm)
+    p = re.search(r"(?m)^project:\s*\"?\[\[([^\]|#]+)", fm)
+    return (t.group(1) if t else ""), (p.group(1).strip() if p else "")
+
+
+def project_owner(rel, notes_meta, hubs):
+    """Which project a note belongs to (by hub folder, task folder or `project` field), else ''."""
+    _, proj = notes_meta.get(rel, ("", ""))
+    if proj:
+        return proj
+    for name, folder in hubs.items():
+        if folder and rel.startswith(folder + "/"):
+            return name
+    for f in FOLDERS.values():
+        if rel.startswith(f["tasks"] + "/"):
+            parts = rel[len(f["tasks"]) + 1:].split("/")
+            if len(parts) > 1:
+                return parts[0]
+    return ""
+
+
+def allowed_notes():
+    """Set of vault-relative note paths visible under the lock (None = no lock)."""
+    if not LOCK["projects"]:
+        return None
+    notes = all_notes()
+    meta = {n: head_of(n) for n in notes}
+    hubs, hub_files = {}, {}  # project name -> hub folder ('' if the hub is not in its own folder)
+    for n in notes:
+        base = os.path.basename(n)[:-3]
+        if meta[n][0] in ("project", "research") and area_of(n) in FOLDERS:
+            folder = os.path.dirname(n)
+            hubs[base] = folder if os.path.basename(folder) == base else ""
+            hub_files[base] = n
+    locked = {p.casefold() for p in LOCK["projects"]}
+    owner = {n: project_owner(n, meta, hubs) for n in notes}
+    ok = {n for n in notes if owner[n].casefold() in locked}
+    ok |= {hub_files[p] for p in hub_files if p.casefold() in locked}
+    if LOCK["linked"]:
+        by_base = {}
+        for n in notes:
+            by_base.setdefault(os.path.basename(n)[:-3].casefold(), []).append(n)
+        for p in [p for p in hub_files if p.casefold() in locked]:
+            text = open(os.path.join(VAULT, hub_files[p]), encoding="utf-8", errors="replace").read()
+            for target in LINK_RE.findall(text):
+                for n in by_base.get(target.strip().split("/")[-1].casefold(), []):
+                    if not owner[n] and meta[n][0] not in ("moc", "system", "analysis"):
+                        ok.add(n)
+    return ok
+
+
+def check_project(name):
+    if LOCK["projects"] and clean_name(name).casefold() not in {p.casefold() for p in LOCK["projects"]}:
+        raise PermissionError("this server only serves these projects: " + ", ".join(LOCK["projects"]))
 
 
 def clean_name(s):
@@ -122,8 +211,32 @@ def log(op, msg):
 
 
 # ------------------------------------------------------------------ tools
+def locked_index(ok, sc):
+    """Catalogue of the visible notes only (the shared Index.md would list every project)."""
+    text = open(os.path.join(VAULT, "99 System", "Index.md"), encoding="utf-8").read()
+    summary = {}
+    for m in re.finditer(r"(?m)^- \[\[([^\]]+)\]\](.*)$", text):
+        summary.setdefault(m.group(1).casefold(), m.group(2).strip())
+    out = [f"# Index (locked to: {', '.join(LOCK['projects'])})"]
+    folder = None
+    for n in sorted(ok):
+        if sc != "all" and area_of(n) != sc:
+            continue
+        d = os.path.dirname(n)
+        if d != folder:
+            out += ["", f"## {d}"]; folder = d
+        base = os.path.basename(n)[:-3]
+        t, _ = head_of(n)
+        extra = summary.get(base.casefold(), "")
+        out.append(f"- [[{base}]]" + (f" ({t})" if t and not extra else "") + (f" {extra}" if extra else ""))
+    return "\n".join(out) if len(out) > 1 else "(no notes in the locked projects)"
+
+
 def t_index(a):
     sc = scope_of(a)
+    ok = allowed_notes()
+    if ok is not None:
+        return locked_index(ok, sc)[:MAX_READ]
     text = open(os.path.join(VAULT, "99 System", "Index.md"), encoding="utf-8").read()
     if sc != "all":
         head = {"personal": "# Personal", "work": "# Work"}[sc]
@@ -136,7 +249,24 @@ def t_search(a):
     q = str(a.get("query", "")).strip()
     if not q:
         raise ValueError("query is required")
-    return run_tool("search", q, "--k", str(int(a.get("k", 10))), "--scope", scope_of(a))
+    k = int(a.get("k", 10))
+    ok = allowed_notes()
+    if ok is None:
+        return run_tool("search", q, "--k", str(k), "--scope", scope_of(a))
+    # search wide, keep only hits inside the lock
+    out = run_tool("search", q, "--k", "400", "--scope", scope_of(a))
+    blocks, cur = [], None
+    for line in out.splitlines():
+        m = HIT_RE.match(line)
+        if m:
+            cur = [m.group(1) in ok, [line]]; blocks.append(cur)
+        elif cur is not None:
+            cur[1].append(line)
+    kept = ["\n".join(b[1]).rstrip() for b in blocks if b[0]][:k]
+    return "\n\n".join(kept) or "(no results in the locked projects)"
+
+
+HIT_RE = re.compile(r"^\s*-?[\d.]+\s+(.+?\.md):\d+\s")
 
 
 def t_read(a):
@@ -150,11 +280,35 @@ def t_read(a):
 
 
 def t_context(a):
-    return run_tool("context", find(a.get("note", ""), scope_of(a))[:-3].split("/")[-1])
+    out = run_tool("context", find(a.get("note", ""), scope_of(a))[:-3].split("/")[-1])
+    ok = allowed_notes()
+    if ok is None:
+        return out
+    names = {os.path.basename(n)[:-3].casefold() for n in ok}
+    keep, section, hidden = [], "", 0
+    for line in out.splitlines():
+        if re.match(r"^(outgoing|backlinks):", line):
+            section = line[:-1]
+        elif line and not line.startswith(" "):
+            section = ""
+        if section and line.startswith("  "):
+            if line.strip().split(" :: ")[0].casefold() not in names:
+                hidden += 1
+                continue
+        keep.append(line)
+    if hidden:
+        keep.append(f"\n({hidden} links outside the locked projects hidden)")
+    return "\n".join(keep)
 
 
 def t_tasks(a):
     args = ["tasks", "--json", "--scope", scope_of(a)]
+    if LOCK["projects"]:
+        rows = []
+        for p in ([a["project"]] if a.get("project") else LOCK["projects"]):
+            check_project(p)
+            rows += json.loads(run_tool(*args, "--project", str(p)) or "[]")
+        return json.dumps(rows, ensure_ascii=False, indent=1)
     if a.get("project"):
         args += ["--project", str(a["project"])]
     return run_tool(*args)
@@ -165,7 +319,9 @@ def t_list(a):
     folder = str(a.get("folder", "")).strip().strip("/")
     if folder and blocked(folder + "/"):
         raise PermissionError("this folder is not accessible")
-    notes = [n for n in all_notes() if (not folder or n.startswith(folder + "/")) and (sc == "all" or area_of(n) == sc)]
+    ok = allowed_notes()
+    pool = all_notes() if ok is None else sorted(ok)
+    notes = [n for n in pool if (not folder or n.startswith(folder + "/")) and (sc == "all" or area_of(n) == sc)]
     return "\n".join(notes[:2000]) or "(empty)"
 
 
@@ -203,6 +359,12 @@ def t_task(a):
     title = clean_name(a.get("title", ""))
     if not title:
         raise ValueError("title is required")
+    if LOCK["projects"]:
+        if not a.get("project"):
+            if len(LOCK["projects"]) > 1:
+                raise ValueError("project is required: " + ", ".join(LOCK["projects"]))
+            a = dict(a, project=LOCK["projects"][0])
+        check_project(a["project"])
     fm = ["---", "type: task", "status: todo"]
     pr = str(a.get("priority", "")).lower()
     if pr in ("high", "medium", "low"):
@@ -252,7 +414,9 @@ def handle(msg):
         return {"protocolVersion": ver, "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": "second-brain", "version": "1.0.0"},
                 "instructions": "An Obsidian vault with two areas, Personal/ and Work/ (scope: personal | work | all). Start with vault_index, then vault_search and vault_read_note. "
-                                "Write tools only create new notes/tasks; do not write unless the user asks."}
+                                "Write tools only create new notes/tasks; do not write unless the user asks." +
+                                ((" This server is locked to these projects: " + ", ".join(LOCK["projects"]) +
+                                  ". Other projects, tasks and notes are not visible; do not look for them.") if LOCK["projects"] else "")}
     if method == "ping":
         return {}
     if method == "tools/list":
@@ -274,6 +438,7 @@ def handle(msg):
 
 
 def main():
+    parse_args(sys.argv[1:])
     stdin = open(sys.stdin.fileno(), "r", encoding="utf-8", closefd=False)
     stdout = open(sys.stdout.fileno(), "w", encoding="utf-8", newline="\n", closefd=False)
     for line in stdin:

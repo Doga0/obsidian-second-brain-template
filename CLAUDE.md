@@ -76,7 +76,7 @@ python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx
 ```
 All of them take `--scope personal|work|all` (import defaults to personal; `--scope work` → `Work/00 Inbox` + `Work/60 Attachments`). `Index.md` is split into Personal / Work / Shared sections.
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
-MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scope`; protected folders are invisible; it only creates new notes/tasks, in the project's area).
+MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scope`; protected folders are invisible; it only creates new notes/tasks, in the project's area). Started with `--project "<Hub>"` (or `SB_PROJECTS`) it only sees those projects' notes and tasks; see Guide → MCP.
 Retrieval order: `99 System/Index.md`, then `search`, then read only the relevant line ranges. Don't read long source notes end to end.
 
 ## 4. Note types
