@@ -22,6 +22,8 @@ Project lock (optional): an agent can be limited to one or more projects:
   "not found" / filtered out, and new tasks can only be created for the locked projects.
 """
 import datetime, hashlib, json, os, re, subprocess, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vault_format as vf  # shared format check (99 System/config.json)
 
 VAULT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 TOOL = os.path.join(VAULT, "99 System", "scripts", "vault_tool.py")
@@ -222,6 +224,21 @@ def resolve_project(name):
     raise ValueError("project not found: " + name + (". Close names: " + ", ".join(close) if close else ". Create the project hub first (/sb-new)."))
 
 
+def fmt_cfg():
+    return vf.load_config(VAULT)
+
+
+def fmt_guard(old, new, name):
+    """Refuse a write that would introduce a format problem (when format_check is on)."""
+    cfg = fmt_cfg()
+    if not cfg["format_check"]:
+        return
+    L = vf.lang(VAULT)
+    probs = vf.new_issues(old, new, name, cfg, L)
+    if probs:
+        raise ValueError(vf.MSG[L]["refused"] + ": " + "; ".join(m for _, m in probs))
+
+
 def clean_name(s):
     return re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|#^\[\]]', " ", str(s))).strip()[:90]
 
@@ -387,8 +404,11 @@ def t_capture(a):
     src = str(a.get("source", "")).replace('"', "'").strip()
     proj = [f'project: "[[{clean_name(a["project"])}]]"'] if a.get("project") else []
     fm = ["---", f"created: {today}"] + proj + ([f'source: "{src}"'] if src else []) + ["---"]
+    title_h = [f"# {a.get('title') or title}", ""] if fmt_cfg()["title_heading"] else []
+    text = "\n".join(fm + title_h + [content, ""])
+    fmt_guard(None, text, os.path.basename(p)[:-3])
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write("\n".join(fm + [f"# {a.get('title') or title}", "", content, ""]))
+        fh.write(text)
     rel = os.path.relpath(p, VAULT).replace("\\", "/")
     log("mcp-capture", f"[[{rel[:-3]}]] created (MCP)")
     return f"created: {rel}"
@@ -419,14 +439,16 @@ def t_task(a):
         fm.append(f"due: {due}")
     fm += [f"created: {datetime.date.today().isoformat()}", "---"]
     subs = [f"- [ ] {s}" for s in a.get("subtasks", []) or []] or ["- [ ] "]
-    body = [f"# {title}", "", "## Description", str(a.get("description", "")).strip(), "", "## Subtasks", *subs, "", "## Notes", ""]
+    body = ([f"# {title}", ""] if fmt_cfg()["title_heading"] else []) + ["## Description", str(a.get("description", "")).strip(), "", "## Subtasks", *subs, "", "## Notes", ""]
     folder = FOLDERS[write_area(a)]["tasks"]
     if a.get("project"):
         folder = folder + "/" + clean_name(a["project"])  # cards live in <tasks>/<Project>/
     p = unique(folder, title)
     os.makedirs(os.path.dirname(p), exist_ok=True)
+    text = "\n".join(fm + body)
+    fmt_guard(None, text, os.path.basename(p)[:-3])
     with open(p, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write("\n".join(fm + body))
+        fh.write(text)
     rel = os.path.relpath(p, VAULT).replace("\\", "/")
     log("mcp-task", f"[[{rel[:-3]}]] task card created (MCP)")
     return f"created: {rel}"

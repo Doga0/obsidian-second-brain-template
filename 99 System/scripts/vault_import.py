@@ -10,6 +10,15 @@ Used by `vault_tool.py import <file>` and by the Second Brain Tools plugin.
 import csv, datetime, io, os, re, shutil, subprocess, zipfile
 import xml.etree.ElementTree as ET
 
+
+def _titled(vault):
+    """False when 99 System/config.json sets title_heading: false (the file name is the title)."""
+    try:
+        import vault_format
+        return vault_format.load_config(vault)["title_heading"]
+    except Exception:
+        return True
+
 ATTACH = "Personal/60 Resources/Attachments"  # defaults (Personal area)
 INBOX = "Personal/00 Inbox"
 SUPPORTED = {"docx", "xlsx", "pptx", "pdf", "csv"}
@@ -265,7 +274,7 @@ def import_file(src, vault, protected=(), inbox=INBOX, attach=ATTACH):
     kind = {"docx": "Word", "xlsx": "Excel", "pptx": "PowerPoint", "pdf": "PDF", "csv": "CSV"}[ext]
     lines = [
         "---", "type: source", f'source: "{kind} file: {os.path.basename(rel)}"', f"created: {today}", "---",
-        f"# {title}", "",
+        *([f"# {title}", ""] if _titled(vault) else []),
         "> [!abstract] Context",
         f"> **What:** converted automatically from a {kind} file ({today}). Original: [[{rel}]]",
         "> **Why I saved it:** ",

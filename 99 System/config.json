@@ -1,4 +1,6 @@
 {
   "protected": [],
-  "wip_limit": null
+  "wip_limit": null,
+  "format_check": false,
+  "title_heading": true
 }

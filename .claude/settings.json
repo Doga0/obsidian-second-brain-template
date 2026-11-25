@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -X utf8 \"$CLAUDE_PROJECT_DIR/99 System/scripts/vault_tool.py\" fmtcheck --hook",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

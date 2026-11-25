@@ -261,6 +261,7 @@ def finish(a, rel, old, new, op, msg, need=None):
     """Preview, ask for confirmation, or write + log."""
     if old == new:
         return t("same")
+    M.fmt_guard(old, new, os.path.basename(rel)[:-3])
     d = diff(rel, old, new)
     if a.get("dry_run"):
         return f"{t('preview')}\n{d}"
@@ -386,6 +387,9 @@ def t_create_note(a):
             text = text.replace(ph, title)
     else:
         text = f"# {title}\n"
+    titled = M.fmt_cfg()["title_heading"]  # false: the file name is the title, no `# H1` in the note
+    if not titled:
+        text = M.vf.strip_title(text, title)
     ntype = props.get("type") or note_type(text)
     is_hub = ntype in ("project", "research")
     need = None
@@ -415,12 +419,17 @@ def t_create_note(a):
     if content and tpl and re.search(r"(?m)^#{1,3} ", content):
         # content with its own headings is the filled-in body: it replaces the template body (frontmatter kept)
         fm, _ = split_fm(text)
-        if not re.match(r"#\s", content):
+        if titled and not re.match(r"#\s", content):
             content = f"# {title}\n\n" + content
+        if not titled:
+            content = M.vf.strip_title(content, title)
         text = fm + content + "\n"
     elif content:
-        text = text.rstrip("\n") + "\n\n" + content + "\n"
+        if not titled:
+            content = M.vf.strip_title(content, title).strip()
+        text = (text.rstrip("\n") + "\n\n" if text.strip() else text) + content + "\n"
     check_cross(rel, text, a)
+    M.fmt_guard(None, text, title)
     if a.get("dry_run"):
         return f"{t('preview')}: {rel}\n{text[:4000]}"
     if need and not a.get("confirm"):

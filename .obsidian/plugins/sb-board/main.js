@@ -603,6 +603,9 @@ class SbBoardPlugin extends Plugin {
     return '';
   }
 
+  async titleHeading() {
+    try { return JSON.parse(await this.app.vault.adapter.read('99 System/config.json')).title_heading !== false; } catch (e) { return true; }
+  }
   async createCard(type, v) {
     const area = this.projectArea(v.project) || v.area || 'personal';
     const folder = type === 'idea' ? AREAS[area].ideas : this.taskFolder(area, v.project);
@@ -617,7 +620,9 @@ class SbBoardPlugin extends Plugin {
       if (v.project) lines.push(`project: "[[${v.project}]]"`);
       if (v.due) lines.push(`due: ${v.due}`);
     }
-    lines.push(`created: ${today()}`, '---', `# ${v.title.trim()}`, '');
+    lines.push(`created: ${today()}`, '---');
+    if (await this.titleHeading()) lines.push(`# ${v.title.trim()}`);  // config title_heading: false → file name is the title
+    lines.push('');
     if (type === 'task') lines.push('## Description', '', '## Subtasks', '- [ ] ', '', '## Notes', '');
     else lines.push('## Idea', '', '## Why it matters / what it connects to', '', '## Next step', '');
     const file = await this.app.vault.create(path, lines.join('\n'));

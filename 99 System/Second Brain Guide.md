@@ -227,6 +227,14 @@ Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git a
 5. Rewrite one `seed` note in your own words → `evergreen`.
 6. Monthly: `/sb-lint --deep` (contradictions, outdated claims) and `/sb-emerge`.
 
+## Format check
+Settings in `99 System/config.json` (both off by default):
+- `title_heading` (default `true`) — set it to `false` if you use Obsidian's inline title: the file name is then the title, and the board, MCP, import and your templates stop writing a `# Title` line that repeats it.
+- `format_check` (default `false`) — when `true`, these problems are caught: BOM, mixed line endings, unclosed or malformed frontmatter, duplicate frontmatter keys, unclosed code blocks, an H1 repeating the file name, template sections added twice. Headings inside pasted raw text are not judged.
+  - The MCP tools refuse writes that would **introduce** one of these problems.
+  - In Claude Code a hook in `.claude/settings.json` checks every Edit/Write against the file's last git version and tells the agent about new problems.
+  - `vault_tool.py lint` reports a "Format problems" category; `vault_tool.py fmtcheck --fix [--dry-run]` applies the safe fixes (line endings, BOM, repeated title).
+
 ## Keeping it healthy long-term
 - **Before adding a folder**, check whether `type`, `project` or a MOC already does the job. Maximum depth: `Category/Project/note`.
 - **Move and rename files inside Obsidian** (*Automatically update internal links* is on); moving them outside Obsidian breaks links.

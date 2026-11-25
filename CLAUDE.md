@@ -73,6 +73,7 @@ python "99 System/scripts/vault_tool.py" index                    # writes Index
 python "99 System/scripts/vault_tool.py" queue                    # AI queue
 python "99 System/scripts/vault_tool.py" log <op> "<text>"
 python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx/pdf/csv -> source note in the area's inbox
+python "99 System/scripts/vault_tool.py" fmtcheck [note] [--fix]   # format check; --fix applies safe fixes
 ```
 All of them take `--scope personal|work|all` (import defaults to personal; `--scope work` → `Work/00 Inbox` + `Work/60 Attachments`). `Index.md` is split into Personal / Work / Shared sections.
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
@@ -80,6 +81,7 @@ MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scop
 Retrieval order: `99 System/Index.md`, then `search`, then read only the relevant line ranges. Don't read long source notes end to end.
 
 ## 4. Note types
+Format settings in `99 System/config.json`: `format_check` (default false; when true the MCP tools refuse writes that break a note's format and a Claude Code hook in `.claude/settings.json` checks every Edit/Write) and `title_heading` (default true; false = the file name is the title, so notes don't repeat it as `# Title`).
 Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Status · Decisions (embedded Base) · Open questions · Tasks (sb-board) · Experiment log · Related.
 - **Task card** (`Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/<short title>.md`, by the project's area; folder root without a project. When a card's `project` changes, the board plugin moves it to the new project folder): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.
 - **Decision note** (Personal: `Decision - <short name>.md`; Work: `ADR-NNN - <short name>.md`; in the hub folder): `type: decision`, `project`, `status`, `origin`, `decided` (only if known); body: Decision · Rationale · Source · Alternatives.
