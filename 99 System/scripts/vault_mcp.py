@@ -5,8 +5,9 @@ Exposes this vault to MCP clients (Claude Desktop, Claude Code, Codex, other age
 rules as CLAUDE.md:
   - protected folders (99 System/config.json -> "protected") are invisible: not listed, searched or read
   - read tools: index, search, read_note, note_context, list_tasks, list_notes
-  - write tools only CREATE new notes (capture to 00 Inbox, task cards in 15 Tasks/<Project>);
-    they never overwrite, edit, move or delete, and every write is logged to 99 System/Log.md
+  - create tools write NEW notes (capture to 00 Inbox, task cards in 15 Tasks/<Project>); the narrow edit tools
+    in vault_mcp_edit.py (create_note, set_property, edit_text, append, add_link, set_context, move_note,
+    maintain) enforce the CLAUDE.md rules; there is no delete/merge/rename; every write is logged to 99 System/Log.md
 
   - prompts: every skills/sb-*/SKILL.md is served as an MCP prompt (slash command in clients), with a preamble
     that maps file/CLI steps to these tools; vault_skill returns the same text for clients without prompts
@@ -20,7 +21,7 @@ Project lock (optional): an agent can be limited to one or more projects:
   admits notes the hub links to directly unless they belong to another project. Anything else is
   "not found" / filtered out, and new tasks can only be created for the locked projects.
 """
-import datetime, json, os, re, subprocess, sys
+import datetime, hashlib, json, os, re, subprocess, sys
 
 VAULT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 TOOL = os.path.join(VAULT, "99 System", "scripts", "vault_tool.py")
@@ -179,6 +180,7 @@ def allowed_notes():
     owner = {n: project_owner(n, meta, hubs) for n in notes}
     ok = {n for n in notes if owner[n].casefold() in locked}
     ok |= {hub_files[p] for p in hub_files if p.casefold() in locked}
+    ok |= {n for n in notes if meta[n][0] == "moc"}  # maps stay visible (read-only for edit tools) so topics/MOC links work
     if LOCK["linked"]:
         by_base = {}
         for n in notes:
@@ -195,6 +197,29 @@ def allowed_notes():
 def check_project(name):
     if LOCK["projects"] and clean_name(name).casefold() not in {p.casefold() for p in LOCK["projects"]}:
         raise PermissionError("this server only serves these projects: " + ", ".join(LOCK["projects"]))
+
+
+def project_hubs():
+    """Existing project/research hubs: name -> vault-relative path."""
+    out = {}
+    for n in all_notes():
+        if area_of(n) in FOLDERS and head_of(n)[0] in ("project", "research"):
+            out.setdefault(os.path.basename(n)[:-3], n)
+    return out
+
+
+def resolve_project(name):
+    """Canonical hub name for `name` (case-insensitive); unknown names are refused with close matches,
+    so a typo never creates a stray task folder."""
+    import difflib
+    name = clean_name(name)
+    hubs = project_hubs()
+    for h in hubs:
+        if h.casefold() == name.casefold():
+            return h
+    folded = {h.casefold(): h for h in hubs}
+    close = [folded[c] for c in difflib.get_close_matches(name.casefold(), list(folded), n=3, cutoff=0.7)]
+    raise ValueError("project not found: " + name + (". Close names: " + ", ".join(close) if close else ". Create the project hub first (/sb-new)."))
 
 
 def clean_name(s):
@@ -274,12 +299,14 @@ HIT_RE = re.compile(r"^\s*-?[\d.]+\s+(.+?\.md):\d+\s")
 
 def t_read(a):
     rel = find(a.get("path") or a.get("note") or "", scope_of(a))
-    lines = open(os.path.join(VAULT, rel), encoding="utf-8", errors="replace").read().splitlines()
+    raw = open(os.path.join(VAULT, rel), encoding="utf-8", errors="replace", newline="").read()
+    lines = raw.splitlines()
     off = max(0, int(a.get("offset", 1)) - 1)
     lim = int(a.get("limit", 0)) or len(lines)
     chunk = lines[off:off + lim]
     body = "\n".join(f"{off + i + 1}\t{l}" for i, l in enumerate(chunk))
-    return f"# {rel} (lines {off + 1}-{off + len(chunk)} of {len(lines)})\n{body}"[:MAX_READ]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:12]  # pass as expected_sha to the edit tools
+    return f"# {rel} (lines {off + 1}-{off + len(chunk)} of {len(lines)}) sha {digest}\n{body}"[:MAX_READ]
 
 
 def t_context(a):
@@ -352,6 +379,8 @@ def t_capture(a):
                 raise ValueError("project is required: " + ", ".join(LOCK["projects"]))
             a = dict(a, project=LOCK["projects"][0])
         check_project(a["project"])
+    if a.get("project"):
+        a = dict(a, project=resolve_project(a["project"]))
     p = unique(FOLDERS[write_area(a)]["inbox"], title)
     os.makedirs(os.path.dirname(p), exist_ok=True)
     today = datetime.date.today().isoformat()
@@ -375,6 +404,8 @@ def t_task(a):
                 raise ValueError("project is required: " + ", ".join(LOCK["projects"]))
             a = dict(a, project=LOCK["projects"][0])
         check_project(a["project"])
+    if a.get("project"):
+        a = dict(a, project=resolve_project(a["project"]))
     fm = ["---", "type: task", "status: todo"]
     pr = str(a.get("priority", "")).lower()
     if pr in ("high", "medium", "low"):
@@ -405,8 +436,8 @@ STR, INT = {"type": "string"}, {"type": "integer"}
 # ------------------------------------------------------------------ skills as MCP prompts
 SKILLS = os.path.join(VAULT, "skills")
 CLAUDE_SKILLS = os.path.join(VAULT, ".claude", "skills")
-# skills whose main job is changing existing notes; over MCP they can only propose the change
-EDITING = {"sb-connect", "sb-distill", "sb-decide", "sb-experiment", "sb-inbox", "sb-ingest", "sb-lint", "sb-new", "sb-queue"}
+# skills whose main job MCP can't do; they only propose the change (empty since the edit tools exist)
+EDITING = set()
 MCP_PREAMBLE = """## You are running this workflow over MCP
 The skill below was written for agents with direct access to the vault files. You reach the vault only through the `second-brain` MCP tools. Map the steps like this:
 
@@ -419,9 +450,20 @@ The skill below was written for agents with direct access to the vault files. Yo
 | the file-reading tool | `vault_read_note` |
 | a new task card | `vault_create_task` |
 | a new note in the inbox | `vault_capture` |
+| a new note elsewhere, a hub/decision/knowledge note from a template | `vault_create_note` (`template`, `properties`) |
+| add/change/remove a frontmatter key | `vault_set_property` |
+| add a line to a section (hub, MOC, Notes, Experiment Log) | `vault_append` |
+| a `[[Note]] — reason` link | `vault_add_link` |
+| fill a table row, tick a checklist item, fix text | `vault_edit_text` |
+| the Context callout (summary of a source note) | `vault_set_context` |
+| `mv` / `git mv` (move) | `vault_move_note` (`confirm`) |
+| `vault_tool.py index` / `lint` | `vault_maintain` |
+| `vault_tool.py log` | not needed; write tools log themselves |
 | `--scope` | the tools' `scope` parameter |
 
-**Not available over MCP:** editing, moving, renaming or deleting an existing note, `git mv`, `vault_tool.py lint / index / log / import`, writing new notes outside the inbox. When the skill asks for one of these, **do not pretend you did it**: show the change ready to apply (file path, which section, the text to add or change) and tell the user it has to be applied in Obsidian or by an agent with file access. MCP's create tools write the log themselves. Full vault rules: `vault_read_note` path=`CLAUDE.md`.
+Before editing, read the note with `vault_read_note` and pass the `sha` from its header as `expected_sha`. For larger changes show the diff first with `dry_run=true`. Operations that need approval (moves, task/decision status, a task's project) only return a plan without `confirm=true`: show the plan to the user and call again with `confirm=true` once they approve.
+
+**Not available over MCP:** delete, merge, rename, `vault_tool.py import`. When the skill asks for one of these, **do not pretend you did it**: show what should be done and tell the user it has to be done in Obsidian or by an agent with file access. Full vault rules: `vault_read_note` path=`CLAUDE.md`.
 """
 
 
@@ -526,6 +568,14 @@ TOOLS = {
     "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox. project, if given, is written to the note's `project` field (required/automatic under a project lock).", S({"title": STR, "content": STR, "source": STR, "project": STR}, ["title", "content"]), False),
     "vault_create_task": (t_task, "Writes a NEW task card (status: todo) to Work/50 Tasks/<Project> or Personal/15 Tasks/<Project> (folder root without a project): by scope, else the project's area, else personal. priority: high|medium|low; due: YYYY-MM-DD (only if the user gave one).", S({"title": STR, "project": STR, "priority": STR, "due": STR, "description": STR, "subtasks": {"type": "array", "items": STR}}, ["title"]), False),
 }
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vault_mcp_edit  # narrow edit tools (rules enforced there)
+TOOLS.update(vault_mcp_edit.tools(sys.modules[__name__]))
+
+
+def missing_note():
+    missing = [x for x in LOCK["projects"] if x.casefold() not in {h.casefold() for h in project_hubs()}]
+    return (" WARNING: these locked projects have no hub: " + ", ".join(missing) + " (create the project first).") if missing else ""
 
 
 def handle(msg):
@@ -535,9 +585,9 @@ def handle(msg):
         return {"protocolVersion": ver, "capabilities": {"tools": {"listChanged": False}, "prompts": {"listChanged": False}},
                 "serverInfo": {"name": "second-brain", "version": "1.0.0"},
                 "instructions": "An Obsidian vault with two areas, Personal/ and Work/ (scope: personal | work | all). Start with vault_index, then vault_search and vault_read_note. "
-                                "Write tools only create new notes/tasks; do not write unless the user asks." +
+                                "Use the write and edit tools only when the user asks; the ones that need approval return a plan without confirm=true." +
                                 ((" This server is locked to these projects: " + ", ".join(LOCK["projects"]) +
-                                  ". Other projects, tasks and notes are not visible; do not look for them.") if LOCK["projects"] else "")}
+                                  ". Other projects, tasks and notes are not visible; do not look for them.") if LOCK["projects"] else "") + missing_note()}
     if method == "ping":
         return {}
     if method == "prompts/list":
