@@ -204,6 +204,7 @@ Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git a
   {"mcpServers": {"second-brain": {"command": "python", "args": ["-X", "utf8", "<path to vault>/99 System/scripts/vault_mcp.py"]}}}
   ```
   On macOS/Linux use `python3`; if Claude can't find Python, put the interpreter's full path in `command`.
+  > [!warning] A server in this file is global: the desktop app also adds it to **every** session in its Code tab, in any project, so it bypasses project locks there. To give an agent outside the vault access, prefer a separate entry in that project locked with `--project` (see "Project lock" below); if you add one here, consider locking it too.
 - **Skills over MCP.** The server also offers the `skills/sb-*` workflows as MCP *prompts*, so an agent without access to the vault files can still use `/sb-ask`, `/sb-brief` and the rest. In Claude Code: `/mcp__second-brain__sb-ask <question>`; in Claude Desktop pick them from the `+` menu under the server. Clients without prompt support use the `vault_skill` tool (no `name` = list).
   - Each prompt starts with a short section that maps the skill's file and CLI steps to the MCP tools, plus the "Hard rules" section of CLAUDE.md.
   - Skills that edit notes (connect, distill, decide, experiment, inbox, ingest, lint, new, queue, task updates) run end to end with the edit tools. Steps that need a delete or merge come back as a suggestion only.
