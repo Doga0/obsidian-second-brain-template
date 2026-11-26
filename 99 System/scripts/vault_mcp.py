@@ -361,6 +361,40 @@ def t_tasks(a):
     return run_tool(*args)
 
 
+def t_history(a):
+    import vault_history
+    h = vault_history.H(VAULT)
+    action = str(a.get("action", "history")).strip()
+    since, until = a.get("since") or None, a.get("until") or None
+    if action in ("history", "at"):
+        rel = find(a.get("note") or a.get("path") or "", scope_of(a))
+        if action == "history":
+            return h.history(rel, since, until)[:MAX_READ]
+        date = str(a.get("date", "")).strip()
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            raise ValueError('date must be YYYY-MM-DD')
+        return h.at(rel, date)[:MAX_READ]
+    if action == "timeline":
+        if not a.get("project"):
+            if len(LOCK["projects"]) == 1:
+                a = dict(a, project=LOCK["projects"][0])
+            else:
+                raise ValueError('timeline needs project')
+        name = resolve_project(a["project"])
+        check_project(name)
+        hub = project_hubs()[name]
+        ok = allowed_notes()
+        folder = os.path.dirname(hub) if os.path.basename(os.path.dirname(hub)) == name else None
+        tasks = tuple(f["tasks"] + "/" + name + "/" for f in FOLDERS.values())
+        notes = []
+        for n in all_notes():
+            t, proj = head_of(n)
+            if (n == hub or (folder and n.startswith(folder + "/")) or n.startswith(tasks) or proj == name) and (ok is None or n in ok):
+                notes.append((n, t))
+        return h.timeline(name, notes, since, until, hub)[:MAX_READ]
+    raise ValueError('action: history | at | timeline')
+
+
 def t_list(a):
     sc = scope_of(a)
     folder = str(a.get("folder", "")).strip().strip("/")
@@ -469,6 +503,7 @@ The skill below was written for agents with direct access to the vault files. Yo
 | `vault_tool.py search` | `vault_search` (then read the relevant sections with `vault_read_note` + offset/limit) |
 | `vault_tool.py context` | `vault_note_context` |
 | `vault_tool.py tasks [--project X]` | `vault_list_tasks` (`project`) |
+| `vault_tool.py history / at / timeline` | `vault_history` (`action`, `note`, `project`, `date`, `since`, `until`) |
 | the file-reading tool | `vault_read_note` |
 | a new task card | `vault_create_task` |
 | a new note in the inbox | `vault_capture` |
@@ -585,6 +620,7 @@ TOOLS = {
     "vault_read_note": (t_read, "Reads a note with line numbers. path: vault-relative path or note name. Use offset/limit to read a section.", S({"path": STR, "offset": INT, "limit": INT}, ["path"]), True),
     "vault_note_context": (t_context, "Frontmatter, heading outline, outgoing links and backlinks of a note.", S({"note": STR}, ["note"]), True),
     "vault_list_tasks": (t_tasks, "Board task cards (JSON): area, status, priority, dates, project. Filter with project and scope.", S({"project": STR}), True),
+    "vault_history": (t_history, 'Change over time (from git history): action=history → versions of a note (frontmatter and section changes; since/until YYYY-MM-DD); action=at → the note as it was on date; action=timeline → a project\'s decisions, task status changes, hub changes and experiments on one timeline. For questions like "why did we change this" or "what were we using last month".', S({"action": {"type": "string", "enum": ["history", "at", "timeline"]}, "note": STR, "project": STR, "date": STR, "since": STR, "until": STR}, ["action"]), True),
     "vault_list_notes": (t_list, "List of note files; narrow it with folder and scope.", S({"folder": STR}), True),
     "vault_skill": (t_skill, "Second Brain workflows (/sb-ask, /sb-brief, /sb-task …): with no name, lists them; with a name, returns that skill's instructions adapted for MCP, which you then follow. args: the command input. For clients without MCP prompts.", {"type": "object", "properties": {"name": STR, "args": STR}, "required": []}, True),
     "vault_capture": (t_capture, "Writes a NEW note to an inbox (never changes an existing note): scope=work -> Work/00 Inbox, otherwise Personal/00 Inbox. project, if given, is written to the note's `project` field (required/automatic under a project lock).", S({"title": STR, "content": STR, "source": STR, "project": STR}, ["title", "content"]), False),

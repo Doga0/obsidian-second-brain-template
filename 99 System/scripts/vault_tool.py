@@ -16,6 +16,9 @@ Commands
   stats                          Counts by type / status / folder
   protected-baseline             Record hashes of protected folders (see config.json)
   clean-examples [--yes]         List (or delete with --yes) notes marked `example: true`
+  history <note> [--since D] [--until D]   Versions of a note: frontmatter and section changes (git)
+  at <note> <YYYY-MM-DD>   The note as it was on that date
+  timeline --project X [--since D] [--until D]   A project's decisions, tasks, hub and experiments on one timeline
   fmtcheck [notes] [--fix [--dry-run]] [--hook]  Format check (99 System/config.json: format_check, title_heading)
   import <file> [--json]         docx/xlsx/pptx/pdf/csv -> source note in the area's inbox (original kept in its attachments)
 
@@ -596,6 +599,69 @@ def cmd_fmtcheck(args):
         cmd_log("fmtcheck", f"{found} {'fixed'}")
 
 
+def _opt(a, flag):
+    if flag in a:
+        i = a.index(flag)
+        v = a[i + 1] if i + 1 < len(a) else ""
+        del a[i:i + 2]
+        return v
+    return None
+
+
+def _one_note(q):
+    r = find_note(q)
+    if not r:
+        print('note not found' + ": " + q); sys.exit(1)
+    if len(r) > 1:
+        print('several notes match' + ": " + ", ".join(r)); sys.exit(1)
+    return r[0]
+
+
+def project_notes(project):
+    """(hub rel, [(rel, type)]) for a project: hub folder, its task folder and notes whose `project` is the hub."""
+    hub = None
+    for n in NOTES:
+        fm, _ = frontmatter(n)
+        if fm.get("type") in ("project", "research") and name_of(n).lower() == project.lower():
+            hub = n
+    if not hub:
+        return None, []
+    name = name_of(hub)
+    folder = os.path.dirname(hub) if os.path.basename(os.path.dirname(hub)) == name else None
+    tasks = tuple(f"{f['tasks']}/{name}/" for f in AREA_FOLDERS.values())
+    out = []
+    for n in NOTES:
+        fm, _ = frontmatter(n)
+        proj = re.sub(r"[\[\]\"]", "", fm.get("project") or "").split("|")[0].strip()
+        if n == hub or (folder and n.startswith(folder + "/")) or n.startswith(tasks) or proj == name:
+            out.append((n, fm.get("type", "")))
+    return hub, out
+
+
+def cmd_history(a):
+    import vault_history
+    h = vault_history.H(VAULT)
+    since, until = _opt(a, "--since"), _opt(a, "--until")
+    print(h.history(_one_note(" ".join(a)), since, until))
+
+
+def cmd_at(a):
+    import vault_history
+    date = a[-1] if a and re.fullmatch(r"\d{4}-\d{2}-\d{2}", a[-1]) else None
+    if not date:
+        print('date must be YYYY-MM-DD'); sys.exit(1)
+    print(vault_history.H(VAULT).at(_one_note(" ".join(a[:-1])), date))
+
+
+def cmd_timeline(a):
+    import vault_history
+    since, until, project = _opt(a, "--since"), _opt(a, "--until"), _opt(a, "--project") or " ".join(a)
+    hub, notes = project_notes(project)
+    if not hub:
+        print('project not found' + ": " + project); sys.exit(1)
+    print(vault_history.H(VAULT).timeline(name_of(hub), notes, since, until, hub))
+
+
 def task_rows(project=None):
     rows = []
     for n in NOTES:
@@ -754,6 +820,12 @@ if __name__ == "__main__":
         cmd_protected_baseline()
     elif cmd == "clean-examples":
         cmd_clean_examples("--yes" in a)
+    elif cmd == "history":
+        cmd_history(a[1:])
+    elif cmd == "at":
+        cmd_at(a[1:])
+    elif cmd == "timeline":
+        cmd_timeline(a[1:])
     elif cmd == "fmtcheck":
         cmd_fmtcheck(a[1:])
     elif cmd == "import":

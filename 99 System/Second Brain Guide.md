@@ -94,6 +94,10 @@ The vault has two areas with different layouts; the shared system sits at the ro
 - [[Home]]: tables for pending decisions, active projects, AI queue, Inbox, analyses, knowledge.
 - Natural language: `/sb-ask <question>` in Claude Code, with cited answers. [[Index]] is a one-line catalog of every note.
 - Hubs are the entry point to every project: "what did I decide here?" → the hub's Decisions table.
+- **Over time:** "Why did we change this decision?", "What were we using last month?" — from the vault's git history (needs the vault to be a git repo, e.g. with the bundled Obsidian Git backups):
+  - `vault_tool.py timeline --project <Hub> [--since D] [--until D]` — decisions (created, status changes, `decided`, the notes in their Source section), task status changes, hub section changes and Experiment Log rows on one timeline.
+  - `vault_tool.py history <note>` — what changed in each version (frontmatter keys and per section); `at <note> <YYYY-MM-DD>` — the note as it was on that date.
+  - Auto-backup commit messages carry no meaning, so the meaning comes from each version's diff; uncommitted changes show up as the "working copy". Over MCP: the `vault_history` tool (respects the project lock); `/sb-ask` and `/sb-brief` use it for questions about time.
 
 ## Board
 Trello/Jira-style management through the bundled **Second Brain Board** plugin (`.obsidian/plugins/sb-board/`). Every card is a real note and its column is the note's `status`, so the board, Bases tables, hubs and AI commands all see the same data.

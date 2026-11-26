@@ -74,6 +74,9 @@ python "99 System/scripts/vault_tool.py" queue                    # AI queue
 python "99 System/scripts/vault_tool.py" log <op> "<text>"
 python "99 System/scripts/vault_tool.py" import <file>          # docx/xlsx/pptx/pdf/csv -> source note in the area's inbox
 python "99 System/scripts/vault_tool.py" fmtcheck [note] [--fix]   # format check; --fix applies safe fixes
+python "99 System/scripts/vault_tool.py" history <note> [--since D]  # versions of a note: frontmatter/section changes (git)
+python "99 System/scripts/vault_tool.py" at <note> <YYYY-MM-DD>     # the note as it was on that date
+python "99 System/scripts/vault_tool.py" timeline --project <Hub>  # decisions, tasks, hub, experiments on one timeline
 ```
 All of them take `--scope personal|work|all` (import defaults to personal; `--scope work` → `Work/00 Inbox` + `Work/60 Attachments`). `Index.md` is split into Personal / Work / Shared sections.
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
