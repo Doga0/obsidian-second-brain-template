@@ -9,13 +9,16 @@ A ready-to-use Obsidian vault for running a **second brain**: projects, research
 - 📋 **Kanban board:** Trello/Jira-style boards where every card is a real note (To Do / In Progress / Done), with drag and drop, priorities, due dates, subtasks and per-project progress bars
 - ✅ **Decision log:** decisions are notes you approve with one click; AI-suggested decisions stay "proposed" until you accept them
 - 🤖 **17 AI commands** (`/sb-ingest`, `/sb-ask`, `/sb-plan`, `/sb-review`, `/sb-challenge`, …) following the LLM-Wiki pattern (ingest → query → lint), with safety rules: propose before writing, never edit raw sources, log every change
+- 🧠 **Context and project memory:** the AI starts from a small budgeted overview instead of reading the whole index, loads one project's pack when needed, and keeps a per-project memory (pinned context, session handoffs, dead ends) so a new session picks up where the last one stopped
+- 🔎 **Measured search:** section-level search with one row per note and a confidence label (strong / medium / weak / none) that tells the AI whether to search again; `evalsearch` measures recall on your own labelled questions
+- ♻️ **Freshness and history:** suggestions for notes to re-check, lines that rest on superseded decisions and undated numbers that go stale; "why did we change this?" answered from the vault's Git history
 - 📊 **Dashboards** built with native Obsidian Bases: pending decisions, active projects, AI queue, Inbox
 - 🕓 **Version history built in:** the bundled Git plugin auto-commits every 10 minutes; connect your own private repo for off-site backup and multi-device sync
 - 🗓 **Calendar, activity heatmap and reminders:** see what got done when, a GitHub-style activity graph, and notifications for due tasks
 - ⚡ **One quick menu** (`Ctrl/Cmd+O`): jump to any note, create a note/task/idea, or run a command
 - ✍️ **Writing tools:** `/` command menu, autocomplete, formatting toolbar, auto-updating table of contents, LaTeX shortcuts, folder icons
 - 📄 **Files:** highlight and annotate PDFs, preview Word and Excel files, import docx/xlsx/pptx/pdf/csv as notes
-- 🔌 **MCP server:** give Claude Desktop, Claude Code, Codex or other MCP clients safe, read-mostly access to your vault
+- 🔌 **MCP server:** give Claude Desktop, Claude Code, Codex or other MCP clients safe access to your vault: read and search, create notes and tasks, and careful edits with rules enforced by the server; lock a server to specific projects, and use the AI commands as MCP prompts
 - 🔒 **Protected folders:** keep private folders completely out of the AI's reach
 - 🧪 Fictional **example notes** you can delete with one command
 
@@ -59,7 +62,7 @@ Setup pushes your vault and switches the Git plugin to automatic sync (commit + 
 |---|---|
 | [Obsidian](https://obsidian.md) 1.9+ | everything (Bases need 1.9) |
 | Python 3.8+ | the AI commands' helper script (`vault_tool.py`) |
-| [Git](https://git-scm.com) | version history (installed by setup on Windows; optional) |
+| [Git](https://git-scm.com) | version history and the `history` / `timeline` commands (installed by setup on Windows; optional) |
 | Desktop Obsidian | the Second Brain Tools plugin (calendar, heatmap, quick menu, reminders, spreadsheet view, import); everything else also works on mobile |
 | [Claude Code](https://claude.com/claude-code) | the `/sb-*` AI commands (optional) |
 | Codex (ChatGPT desktop) | the shared `sb-*` skills and project MCP server (optional) |
@@ -120,43 +123,61 @@ The core **Slash commands** plugin is also on: type `/` at the start of a line t
 ## AI commands (Claude Code and Codex skills)
 Open the vault in Claude Code and type `/sb-`, or in Codex invoke `$sb-ask` or describe the task naturally. The 17 shared workflows live in `skills/sb-*/SKILL.md`; `.claude/skills/` and `.agents/skills/` contain product entrypoints. The rules they all follow are in [`CLAUDE.md`](CLAUDE.md), with Codex guidance in [`AGENTS.md`](AGENTS.md) (propose before writing, never edit raw sources, keep the areas apart, never touch protected folders, log every write). Most take `--scope personal|work|all`.
 
+In Claude Code a session-start hook (`.claude/settings.json`) adds a short overview of the vault (active projects, in-progress and overdue tasks, pinned context; about 2.5 KB) to every new session, so the commands rarely need the full index. Codex and MCP clients get the same overview with `vault_tool.py pack` / `vault_context`.
+
 | Command | Arguments | What it does |
 |---|---|---|
 | `/sb-ingest` | `<Inbox note \| URL \| text> [--yes]` `[--scope personal\|work\|all]` | Files a note/URL/text: decides its type, puts it in the right folder, adds reasoned links, updates the hub/MOC |
 | `/sb-inbox` | `[--yes]` `[--scope personal\|work\|all]` | Classifies everything in the inboxes (`Personal/00 Inbox`, `Work/00 Inbox`) and processes it within its area with one approval table |
-| `/sb-ask` | `<question> [--save]` `[--scope personal\|work\|all]` | Answers from your notes with citations; separates what the vault says from the AI's inference |
+| `/sb-ask` | `<question> [--quick \| --deep] [--save]` `[--scope personal\|work\|all]` | Answers from your notes with citations; separates what the vault says from the AI's inference. Searches again only when the result is weak, and says "not in the vault" instead of guessing; `--quick` / `--deep` set the reading budget |
 | `/sb-connect` | `<note name> [--yes]` `[--scope personal\|work\|all]` | Finds meaningful links for a note and adds them both ways, with relation type and reason |
 | `/sb-distill` | `<concept \| note name>` | Distills a concept into a knowledge note (`Personal/40 Knowledge`; work: `Work/40 Systems & APIs`) or updates a seed note |
 | `/sb-challenge` | `<note \| idea text> [--save]` | Red-teams an idea or decision: assumptions, weak points, counter-evidence, cheapest test |
 | `/sb-emerge` | `[MOC name \| area] [--save]` `[--scope personal\|work\|all]` | Finds cross-project patterns, recurring questions and new idea combinations |
 | `/sb-new` | `<project\|research\|idea\|moc> <name> [goal]` `[--scope personal\|work\|all]` | New project/research/idea/MOC in the right area: folder, hub from template, MOC link |
-| `/sb-brief` | `<hub> [--update \| --handoff]` | Current state of a project: goal, decisions, open questions, next steps, risks; `--handoff`: a handoff note to the project memory at the end of a session |
+| `/sb-brief` | `<hub> [--update \| --handoff]` | Current state of a project: where you left off (from the project memory), goal, decisions, open questions, next steps, risks; `--handoff`: at the end of a session, writes a handoff note to the project memory after your approval |
 | `/sb-decide` | `<hub> "<decision>" \| review` | Logs a decision or walks through pending (`proposed`) decisions to accept/reject |
 | `/sb-experiment` | `<hub> "<experiment>" [result \| file]` | Adds an experiment to the hub's log or records its result against the hypotheses |
 | `/sb-task` | `<task \| free text> [--project <Hub>] [--yes]` `[--scope personal\|work\|all]` | Creates (in the project's area), updates or moves board cards; extracts several tasks from free text |
 | `/sb-plan` | `<Hub> [goal or horizon]` | Reads a hub and proposes an ordered, prioritized task plan; creates cards on approval |
 | `/sb-standup` | `[days] [--project <Hub>] [--save]` `[--scope personal\|work\|all]` | Progress report: done/started work, blockers, overdue and upcoming dates, project progress |
-| `/sb-review` | `[--no-save]` `[--scope personal\|work\|all]` | Weekly review: projects, dates, decisions, inboxes, AI queue; review note with Personal and Work sections |
-| `/sb-lint` | `[--deep] [--yes]` `[--scope personal\|work\|all]` | Health check: broken links, orphans, missing metadata, stale hubs, notes in the wrong area, protected-folder integrity; `--deep` adds contradiction checks |
+| `/sb-review` | `[--no-save]` `[--scope personal\|work\|all]` | Weekly review: projects, dates, decisions, inboxes, AI queue, notes to re-check; review note with Personal and Work sections |
+| `/sb-lint` | `[--deep] [--yes]` `[--scope personal\|work\|all]` | Health check: broken links, orphans, missing metadata, stale hubs, notes in the wrong area, protected-folder integrity, freshness, format problems (with `format_check` on); `--deep` adds contradiction, outdated-claim and new-source checks |
 | `/sb-queue` | `[--yes]` `[--scope personal\|work\|all]` | Processes AI requests left in Obsidian (`ai:` property, `AI Queue.md`) |
 
 ## MCP server
-`99 System/scripts/vault_mcp.py`: Python standard library only, stdio. The MCP client starts it when needed.
+`99 System/scripts/vault_mcp.py` (edit tools in `vault_mcp_edit.py`): Python standard library only, stdio. The MCP client starts it when needed.
 - **Claude Code:** defined in `.mcp.json` at the vault root (approve it the first time).
 - **Codex (ChatGPT desktop):** the same server is defined in `.codex/config.toml` for a trusted project. Open the vault root and start a new chat after adding the configuration.
-- **Claude Desktop:** add it to `claude_desktop_config.json` (example in the Guide).
-- Every tool takes `scope`: `personal`, `work` or `all` (reads default to all). Protected folders, `.obsidian/`, `.git/`, `.claude/`, `.agents/`, `.codex/` and `skills/` are invisible. Write tools only **create** new files, in the project's area (else the `scope`); they can't change, move or delete existing notes. Every write is logged to `99 System/Log.md`.
+- **Claude Desktop:** add it to `claude_desktop_config.json` (example in the Guide). A server there is global: the desktop app also adds it to every Code-tab session in any project, bypassing project locks; prefer a per-project entry.
+- **Scope:** every tool takes `scope`: `personal`, `work` or `all` (reads default to all). Protected folders, `.obsidian/`, `.git/`, `.claude/`, `.agents/`, `.codex/` and `skills/` are invisible.
+- **Writing:** the server enforces the vault rules itself. Raw source notes only take frontmatter and the Context callout; task/decision status changes and moves need `confirm=true`; cross-area links and moves need `allow_cross_area`; `expected_sha` refuses a write if the note changed since you read it; `dry_run` shows the diff first. There is no delete, merge or rename. With `format_check` on, writes that break a note's format are refused. Every write is logged to `99 System/Log.md`.
+- **Project lock:** start the server with `--project "<Hub>"` (repeatable, or `SB_PROJECTS="A;B"`) and the agent only sees and writes those projects' notes and tasks (plus maps, read-only).
+- **Skills as prompts:** the 17 `sb-*` workflows are also MCP prompts (and the `vault_skill` tool for clients without prompts), so an agent without access to the vault files can still use them.
 
 | Tool | Kind | Parameters | What it does |
 |---|---|---|---|
-| `vault_index` | read | `scope` | Returns the catalog (`99 System/Index.md`): type, status and summary of every note, in Personal / Work sections |
-| `vault_search` | read | `query`, `k`, `scope` | Ranked keyword search over note sections (accent-insensitive); file + line number |
-| `vault_read_note` | read | `path`, `offset`, `limit`, `scope` | Reads a note with line numbers; accepts a path or a note name |
+| `vault_context` | read | `project`, `budget`, `scope` | Budgeted context pack; start here. No project: L0 overview (active projects, in-progress/overdue tasks, pins, what is waiting). With a project: L1 pack (goal, status, project memory, decisions, board, open questions, recent changes) |
+| `vault_search` | read | `query`, `k`, `scope` | Ranked search over note sections, one row per note, with a first-line confidence label; file + line number |
+| `vault_read_note` | read | `path`, `offset`, `limit`, `scope` | Reads a note with line numbers (and its `sha`); accepts a path or a note name |
 | `vault_note_context` | read | `note`, `scope` | Frontmatter, heading outline, outgoing links and backlinks |
 | `vault_list_tasks` | read | `project`, `scope` | Board cards as JSON: area, status, priority, dates, subtask count |
 | `vault_list_notes` | read | `folder`, `scope` | List of note files, optionally limited to a folder |
-| `vault_capture` | create | `title`, `content`, `source`, `scope` | Writes a new note to the area's inbox (`Personal/00 Inbox` or `Work/00 Inbox`) |
-| `vault_create_task` | create | `title`, `project`, `priority`, `due`, `description`, `subtasks`, `scope` | Writes a new `status: todo` task card to `Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/` |
+| `vault_history` | read | `action` (history · at · timeline), `note`, `project`, `date`, `since`, `until` | Change over time from Git: a note's versions, a note as it was on a date, a project's timeline |
+| `vault_index` | read | `scope` | The full catalog (`99 System/Index.md`); large, for vault-wide surveys only |
+| `vault_skill` | read | `name`, `args` | Lists the `sb-*` workflows or returns one, adapted for MCP |
+| `vault_capture` | create | `title`, `content`, `source`, `project`, `scope` | Writes a new note to the area's inbox |
+| `vault_create_task` | create | `title`, `project`, `priority`, `due`, `description`, `subtasks`, `scope` | Writes a new `status: todo` card to `Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/` |
+| `vault_create_note` | create | `title`, `folder`, `template`, `content`, `project`, `properties` | New note from a template (hub, decision, knowledge, project memory…); never overwrites |
+| `vault_set_property` | edit | `note`, `key`, `value`, `remove`, `confirm` | Sets or removes a frontmatter key, validated against the schema |
+| `vault_edit_text` | edit | `note`, `old`, `new` | Replaces an exact, unique piece of text (fill a table row, tick a checklist item) |
+| `vault_append` | edit | `note`, `heading`, `text` | Appends to the end of a section; never removes text |
+| `vault_add_link` | edit | `note`, `target`, `reason`, `heading` | Adds `- [[target]] — reason` (default section: Related) |
+| `vault_set_context` | edit | `note`, `text` | Creates or replaces the note's Context callout (source bodies untouched) |
+| `vault_move_note` | edit | `note`, `folder`, `confirm` | Moves a note to another folder; always needs `confirm=true` |
+| `vault_maintain` | edit | `action` (index · lint) | Rebuilds `Index.md` or the health report |
+
+Edit tools also take `expected_sha` and `dry_run` (and `allow_cross_area` where it applies).
 
 ## Helper script
 `python "99 System/scripts/vault_tool.py" <command>`: the deterministic tool behind the AI commands and plugins (add `-X utf8` after `python` on Windows). Every command takes `--scope personal|work|all`.
@@ -165,19 +186,25 @@ Open the vault in Claude Code and type `/sb-`, or in Codex invoke `$sb-ask` or d
 |---|---|
 | `lint [--no-write]` | Health check; writes `99 System/Health.md` |
 | `index` | Regenerates the `99 System/Index.md` catalog |
-| `search <query> [--k N]` | Section-level ranked search |
+| `search <query> [--k N] [--explain]` | Section-level ranked search, one row per note, with a confidence label; `--explain` shows the score parts |
+| `evalsearch [--save F] [--compare F]` | Search quality on labelled questions (`99 System/eval/`): recall@K, MRR, unanswerable questions, confidence label accuracy |
+| `pack [--project <Hub>] [--budget N]` | Budgeted context: L0 vault overview, or L1 project pack |
+| `memory <Hub> [--init] [--since]` | Project memory: read it, create it, or list what changed since the last session |
+| `fresh [--reviewed <note>]` | Freshness suggestions (notes to re-check, lines resting on invalid decisions, undated changing claims); `--reviewed` marks a note as checked |
+| `history <note>` · `at <note> <YYYY-MM-DD>` · `timeline --project <Hub>` | Change over time from Git: a note's versions, a note on a date, a project's timeline |
 | `context <note>` | Outline, links and backlinks of a note |
 | `tasks [--project X] [--json]` | The board as text/JSON + last 7 days of activity |
 | `queue` | Pending AI requests |
 | `import <file> [--json] [--scope work]` | docx/xlsx/pptx/pdf/csv → `type: source` note in the area's inbox; original kept in the area's attachments |
 | `log <op> <text>` | Appends to `99 System/Log.md` |
+| `fmtcheck [note] [--fix]` | Format check (frontmatter, fences, duplicate titles…); `--fix` applies safe fixes |
 | `stats` | Counts by type / status / folder |
 | `protected-baseline` | Records hashes of protected folders |
 | `clean-examples [--yes]` | Lists (or deletes) the example notes |
 
 ## Privacy
 - Your notes stay local; nothing in the template sends data anywhere.
-- AI skills run only when you invoke them in Claude Code or Codex; the MCP server runs only when an MCP client you configured starts it.
+- AI skills run only when you invoke them in Claude Code or Codex; the MCP server runs only when an MCP client you configured starts it. The Claude Code session-start hook only reads the vault locally and adds a short overview to your own session.
 - Work and personal notes live in separate areas; commands only mix them when you ask for both.
 - List private folders under `"protected"` in `99 System/config.json` to exclude them from every command and the board.
 - If you keep your vault in Git, use a **private** repository.
