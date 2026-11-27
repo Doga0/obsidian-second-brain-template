@@ -151,7 +151,7 @@ Every command follows the same safety rules:
 - `/sb-queue` in Claude Code processes all of them, clears the `ai` field and checks off the items with a link to the result.
 
 **The helper script** (Python 3.8+, no dependencies) can be run by hand too:
-- `python "99 System/scripts/vault_tool.py" search "keyword"`: section-level, accent-insensitive search
+- `python "99 System/scripts/vault_tool.py" search "keyword"`: section-level, accent-insensitive search with one row per note (other matching sections listed under it). Filler words are ignored; each section is also matched on its note name, project, type and parent headings; superseded/rejected/archived notes and done tasks rank lower, and a question about "now/current" favours live, recent notes. `--explain` shows why a note ranked where it did; weights can be tuned under `"search"` in `99 System/config.json`, then checked with `evalsearch --compare`.
 - `python "99 System/scripts/vault_tool.py" evalsearch`: measures how well search finds the right note. It runs labelled questions (question + the note that should come up; `gold: []` = the vault has no answer) and reports recall@1/3/5/10, MRR and the misses. It uses `99 System/eval/search_cases.jsonl`, or the bundled `search_cases.example.jsonl` (questions about the example notes) until you write your own. Save a baseline with `--save` before changing search, then check with `--compare`.
 - `… context "Note name"`: outline, links and backlinks
 - `… tasks`: board as text, with last-7-days activity

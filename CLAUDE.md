@@ -65,7 +65,7 @@ No tags. Don't invent fields; propose them.
 
 ## 3. Tools: use these before reading files
 ```
-python "99 System/scripts/vault_tool.py" search <query> [--k N]   # section-level ranked search
+python "99 System/scripts/vault_tool.py" search <query> [--k N] [--explain]   # section-level ranked search, one row per note
 python "99 System/scripts/vault_tool.py" evalsearch [--compare F]  # search quality on 99 System/eval/search_cases.jsonl (recall@K, MRR); run before and after changing search
 python "99 System/scripts/vault_tool.py" context <note>           # outline, links, backlinks
 python "99 System/scripts/vault_tool.py" tasks [--project X] [--json]

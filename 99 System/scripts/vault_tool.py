@@ -8,7 +8,7 @@ Usage (from the vault root):
 Commands
   lint [--no-write]              Health check; writes 99 System/Health.md unless --no-write
   index                          Regenerate 99 System/Index.md (one-line catalog of every note)
-  search <query> [--k N]         Ranked keyword search over note sections (accent-insensitive)
+  search <query> [--k N] [--explain]  Ranked search over note sections, one row per note (accent-insensitive)
   evalsearch [--cases F] [--save F] [--compare F] [--neg-threshold X] [--json]
                                  Search quality on labelled questions (99 System/eval/search_cases.jsonl): recall@K, MRR, negatives
   context <note>                 Frontmatter, outline, outgoing links and backlinks of a note
@@ -476,18 +476,98 @@ def query_terms(q):
     return [t for t in TOKEN.findall(norm(q)) if len(t) > 1]
 
 
+# Search ranking. Measured with `evalsearch`; methods adapted from two MIT-licensed second-brain repos
+# (eugeniughelbur/obsidian-second-brain: type/status weights, supersession, "now" intent; AgriciDaniel/claude-obsidian:
+# contextual prefix per chunk, dedup by page, --explain). Weights can be overridden in 99 System/config.json → "search".
+STOPWORDS = {norm(w) for w in (
+    "the a an of to in on at is are was were be been do does did we i you it its for with as by from or and that this "
+    "these those what which who how why when where should would can could will our my your there about into than then"
+).split()}
+NOW_WORDS = [norm(w) for w in ("current", "currently", "now", "right now", "latest", "still", "today", "valid", "these days")]
+TYPE_WORDS = {"decision": "decision adr", "task": "task", "meeting": "meeting", "knowledge": "knowledge concept",
+              "project": "project", "research": "research", "idea": "idea", "analysis": "analysis",
+              "org": "organization", "source": "source"}
+SEARCH_CFG = {"type_weight": {"system": 0.6, "source": 0.85, "analysis": 0.9, "moc": 0.9},
+              "stale": ["superseded", "rejected", "dropped", "archived"], "stale_weight": 0.6, "done_task_weight": 0.85,
+              "now_live": ["accepted", "active", "doing", "evergreen"], "now_live_weight": 1.3, "now_stale_weight": 0.45}
+SEARCH_CFG.update(CFG.get("search", {}) if isinstance(CFG.get("search"), dict) else {})
+SYSTEM_NOTES = {"CLAUDE.md", "README.md", "Home.md", "Board.md", QUEUE_NOTE, f"{SYSTEM}/Second Brain Guide.md"}
+
+
+def parse_query(q):
+    """(terms, now_intent): stopwords and 'now' words are dropped from scoring (kept if nothing else is left)."""
+    nq = " " + re.sub(r"\s+", " ", norm(q)) + " "
+    now = any(f" {w} " in nq for w in NOW_WORDS)
+    rest = nq
+    for w in NOW_WORDS:
+        rest = rest.replace(f" {w} ", " ")
+    terms = [t for t in query_terms(rest) if t not in STOPWORDS]
+    return (terms or query_terms(q)), now
+
+
+def note_meta(n):
+    fm, _ = frontmatter(n)
+    typ = "system" if n in SYSTEM_NOTES or name_of(n).startswith("README") else str(fm.get("type", "") or "")
+    proj = re.sub(r"[\[\]\"]", "", str(fm.get("project", "") or "")).split("|")[0]
+    when = next((str(fm[k])[:10] for k in ("decided", "completed", "updated", "created") if fm.get(k)), None)
+    sup = fm.get("supersedes", [])
+    sup = [re.sub(r"[\[\]\"]", "", x).split("|")[0] for x in (sup if isinstance(sup, list) else [sup]) if x]
+    return {"type": typ, "status": str(fm.get("status", "") or ""), "project": proj, "when": when, "supersedes": sup}
+
+
+def _age_days(n, meta):
+    try:
+        d = datetime.date.fromisoformat(meta["when"]) if meta["when"] else mtime(n)
+    except ValueError:
+        d = mtime(n)
+    return max(0, (TODAY - d).days)
+
+
+def note_weight(n, meta, now, superseded):
+    """Query-independent volume knob × status fade × 'now' intent. Returns (weight, [reasons])."""
+    w, why, st = 1.0, [], meta["status"]
+    tw = SEARCH_CFG["type_weight"].get(meta["type"])
+    if tw:
+        w *= tw; why.append(f"{meta['type']}×{tw}")
+    stale = st in SEARCH_CFG["stale"] or name_of(n) in superseded
+    if now:
+        if stale:
+            w *= SEARCH_CFG["now_stale_weight"]; why.append(f"stale×{SEARCH_CFG['now_stale_weight']}")
+        elif meta["type"] == "task" and st == "done":
+            w *= SEARCH_CFG["now_stale_weight"]; why.append(f"done×{SEARCH_CFG['now_stale_weight']}")
+        elif st in SEARCH_CFG["now_live"]:
+            w *= SEARCH_CFG["now_live_weight"]; why.append(f"{st}×{SEARCH_CFG['now_live_weight']}")
+        f = 0.6 + 0.4 * math.exp(-_age_days(n, meta) / 130.0)
+        w *= f; why.append(f"recency×{f:.2f}")
+    elif stale:
+        w *= SEARCH_CFG["stale_weight"]; why.append(f"{'superseded' if name_of(n) in superseded else st}×{SEARCH_CFG['stale_weight']}")
+    elif meta["type"] == "task" and st == "done":
+        w *= SEARCH_CFG["done_task_weight"]; why.append(f"done×{SEARCH_CFG['done_task_weight']}")
+    return w, why
+
+
 def search_rank(q):
-    """[(score, note, line, heading, body)] best first, every scoring section (cmd_search prints the top k)."""
-    qt = query_terms(q)
+    """One row per note, best first: (score, note, line, heading, body, info).
+    info: {"also": [(line, heading, score)] other matching sections, "why": scoring explanation}.
+    Sections are scored with BM25 over the section text plus a context prefix (note name, project, type words,
+    parent headings); the note keeps its best section, then type/status/'now' weights apply."""
+    qt, now = parse_query(q)
     if not qt:
         return []
-    docs = []
+    docs, metas = [], {}
     for n in NOTES:
         if is_template(n) or n in GENERATED or not in_scope(n):
             continue
+        meta = metas[n] = note_meta(n)
+        prefix = TOKEN.findall(norm(" ".join([name_of(n), meta["project"], TYPE_WORDS.get(meta["type"], "")])))
+        path = []
+        hs = {ln: lvl for ln, lvl, _ in headings(n)}
         for ln, h, body in sections(n):
+            lvl = hs.get(ln, 0)
+            path = [p for p in path if p[0] < lvl] + ([(lvl, h)] if lvl else [])
+            parents = TOKEN.findall(norm(" ".join(x[1] for x in path[:-1])))
             toks = TOKEN.findall(norm(body))
-            docs.append((n, ln, h, body, Counter(toks), len(toks)))
+            docs.append((n, ln, h, body, Counter(toks + prefix + parents), len(toks)))
     N = len(docs)
     avg = sum(d[5] for d in docs) / max(N, 1)
     df = Counter()
@@ -495,7 +575,7 @@ def search_rank(q):
         for t in set(qt):
             if any(tok.startswith(t) for tok in d[4]):
                 df[t] += 1
-    scored = []
+    best = {}
     for n, ln, h, body, c, L in docs:
         s = 0.0
         for t in qt:
@@ -509,28 +589,46 @@ def search_rank(q):
         covered = sum(1 for t in qt if any(tok.startswith(t) for tok in c))
         s *= (covered / len(qt)) ** 1.5
         if s > 0:
-            scored.append((s, n, ln, h, body))
-    scored.sort(reverse=True)
-    return scored
+            best.setdefault(n, []).append((s, ln, h, body))
+    superseded = {x for n in best for x in metas[n]["supersedes"]}
+    exact = {norm(q).strip()}
+    rows = []
+    for n, secs in best.items():
+        secs.sort(key=lambda x: -x[0])
+        s0, ln, h, body = secs[0]
+        w, why = note_weight(n, metas[n], now, superseded)
+        s = s0 * w
+        if norm(name_of(n)) in exact or any(norm(a) in exact for a, t in ALIASES.items() if t == n):
+            s += 100; why.append("name match")
+        info = {"also": [(x[1], x[2], round(x[0] * w, 2)) for x in secs[1:4]],
+                "why": f"section {s0:.2f}" + (" · " + " · ".join(why) if why else "") + (" · intent: now" if now else "")}
+        rows.append((s, n, ln, h, body, info))
+    rows.sort(key=lambda r: -r[0])
+    return rows
 
 
-def format_hits(q, hits):
-    qt = query_terms(q)
+def format_hits(q, hits, explain=False):
+    qt, _ = parse_query(q)
     out = []
-    for s, n, ln, h, body in hits:
+    for s, n, ln, h, body, info in hits:
         nb = norm(body)
         pos = min([nb.find(t) for t in qt if nb.find(t) >= 0] or [0])
         snip = re.sub(r"\s+", " ", body[max(0, pos - 80): pos + 220]).strip()
-        out.append(f"{s:6.2f}  {n}:{ln}  §{h}\n        {snip}\n")
+        extra = ""
+        if info["also"]:
+            extra += "        + " + " · ".join(f"§{hh} :{l}" for l, hh, _ in info["also"]) + "\n"
+        if explain:
+            extra += f"        ? {info['why']}\n"
+        out.append(f"{s:6.2f}  {n}:{ln}  §{h}\n        {snip}\n{extra}")
     return "\n".join(out)
 
 
-def cmd_search(q, k=12):
+def cmd_search(q, k=12, explain=False):
     if not query_terms(q):
         print("empty query"); return
     hits = search_rank(q)[:k]
     if hits:
-        print(format_hits(q, hits))
+        print(format_hits(q, hits, explain))
 
 
 # ------------------------------------------------------------ retrieval eval
@@ -953,7 +1051,9 @@ if __name__ == "__main__":
             i = a.index("--k")
             k = int(a[i + 1])
             a = a[:i] + a[i + 2:]
-        cmd_search(" ".join(a[1:]), k)
+        ex = "--explain" in a
+        a = [x for x in a if x != "--explain"]
+        cmd_search(" ".join(a[1:]), k, ex)
     elif cmd == "evalsearch":
         cmd_evalsearch(a[1:])
     elif cmd == "context":
