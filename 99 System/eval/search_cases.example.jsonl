@@ -1,0 +1,18 @@
+// Search eval cases for `vault_tool.py evalsearch`, written for the template's (Example) notes.
+// Make your own: copy this file to search_cases.jsonl (used when it exists) and write questions about YOUR notes.
+// One JSON object per line: {"id", "group", "q", "gold": [note name or path], "scope"?}
+//   gold: several notes = any of them counts · gold: [] = the vault has no answer (passes when nothing scores above the threshold)
+// Suggested groups: kw (keywords) · para (paraphrase: avoid the note's title words) · lang (question in another language than the note) · current ("what holds now") · neg (no answer)
+// Workflow: evalsearch --save "99 System/eval/baseline.json" before changing search, then evalsearch --compare "99 System/eval/baseline.json".
+{"id": "kw-cdn", "group": "kw", "q": "CDN static hosting", "gold": ["Decision - Host on a CDN (Example)", "Notes - Hosting options (Example)"]}
+{"id": "kw-oauth", "group": "kw", "q": "OAuth2 SSO", "gold": ["ADR-001 - Use OAuth2 for SSO (Example)", "Prepare SSO demo (Example)"]}
+{"id": "kw-invoices", "group": "kw", "q": "invoices payment status API", "gold": ["Payments API (Example)"]}
+{"id": "para-no-server", "group": "para", "q": "turn markdown into plain html at build time so no server is needed", "gold": ["Static Site Generators (Example)"]}
+{"id": "para-cms", "group": "para", "q": "why not use a content management system", "gold": ["Decision - Use a static site generator (Example)"]}
+{"id": "para-login", "group": "para", "q": "how will customers log in to the portal", "gold": ["ADR-001 - Use OAuth2 for SSO (Example)"]}
+{"id": "para-faster", "group": "para", "q": "is the new site really quicker on phones", "gold": ["Page Speed Experiments (Example)", "Measure baseline page load (Example)"]}
+{"id": "para-email", "group": "para", "q": "monthly email to readers", "gold": ["Newsletter for the site (Example)"]}
+{"id": "para-kickoff", "group": "para", "q": "what did the client want in the first meeting", "gold": ["2026-01-15 - Acme Corp - Portal kickoff (Example)"]}
+{"id": "current-hosting", "group": "current", "q": "where will the site be hosted now", "gold": ["Decision - Host on a CDN (Example)"]}
+{"id": "neg-k8s", "group": "neg", "q": "kubernetes helm chart rollout", "gold": []}
+{"id": "neg-recipe", "group": "neg", "q": "lentil soup recipe", "gold": []}

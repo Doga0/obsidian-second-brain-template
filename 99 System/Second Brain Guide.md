@@ -152,6 +152,7 @@ Every command follows the same safety rules:
 
 **The helper script** (Python 3.8+, no dependencies) can be run by hand too:
 - `python "99 System/scripts/vault_tool.py" search "keyword"`: section-level, accent-insensitive search
+- `python "99 System/scripts/vault_tool.py" evalsearch`: measures how well search finds the right note. It runs labelled questions (question + the note that should come up; `gold: []` = the vault has no answer) and reports recall@1/3/5/10, MRR and the misses. It uses `99 System/eval/search_cases.jsonl`, or the bundled `search_cases.example.jsonl` (questions about the example notes) until you write your own. Save a baseline with `--save` before changing search, then check with `--compare`.
 - `… context "Note name"`: outline, links and backlinks
 - `… tasks`: board as text, with last-7-days activity
 - `… lint` / `… index`: refresh Health and Index

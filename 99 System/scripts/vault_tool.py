@@ -9,6 +9,8 @@ Commands
   lint [--no-write]              Health check; writes 99 System/Health.md unless --no-write
   index                          Regenerate 99 System/Index.md (one-line catalog of every note)
   search <query> [--k N]         Ranked keyword search over note sections (accent-insensitive)
+  evalsearch [--cases F] [--save F] [--compare F] [--neg-threshold X] [--json]
+                                 Search quality on labelled questions (99 System/eval/search_cases.jsonl): recall@K, MRR, negatives
   context <note>                 Frontmatter, outline, outgoing links and backlinks of a note
   tasks [--project X] [--json]   Task board as text + last-7-days activity
   queue                          Pending AI requests (`ai:` property + AI Queue checklist)
@@ -470,11 +472,15 @@ def sections(n):
 TOKEN = re.compile(r"[a-z0-9][a-z0-9\-_.]*[a-z0-9]|[a-z0-9]")
 
 
-def cmd_search(q, k=12):
-    qt = [t for t in TOKEN.findall(norm(q)) if len(t) > 1]
+def query_terms(q):
+    return [t for t in TOKEN.findall(norm(q)) if len(t) > 1]
+
+
+def search_rank(q):
+    """[(score, note, line, heading, body)] best first, every scoring section (cmd_search prints the top k)."""
+    qt = query_terms(q)
     if not qt:
-        print("empty query")
-        return
+        return []
     docs = []
     for n in NOTES:
         if is_template(n) or n in GENERATED or not in_scope(n):
@@ -505,11 +511,154 @@ def cmd_search(q, k=12):
         if s > 0:
             scored.append((s, n, ln, h, body))
     scored.sort(reverse=True)
-    for s, n, ln, h, body in scored[:k]:
+    return scored
+
+
+def format_hits(q, hits):
+    qt = query_terms(q)
+    out = []
+    for s, n, ln, h, body in hits:
         nb = norm(body)
         pos = min([nb.find(t) for t in qt if nb.find(t) >= 0] or [0])
         snip = re.sub(r"\s+", " ", body[max(0, pos - 80): pos + 220]).strip()
-        print(f"{s:6.2f}  {n}:{ln}  §{h}\n        {snip}\n")
+        out.append(f"{s:6.2f}  {n}:{ln}  §{h}\n        {snip}\n")
+    return "\n".join(out)
+
+
+def cmd_search(q, k=12):
+    if not query_terms(q):
+        print("empty query"); return
+    hits = search_rank(q)[:k]
+    if hits:
+        print(format_hits(q, hits))
+
+
+# ------------------------------------------------------------ retrieval eval
+EVAL_DIR = f"{SYSTEM}/eval"
+EVAL_CASES = f"{EVAL_DIR}/search_cases.jsonl"
+EVAL_KS = (1, 3, 5, 10)
+
+
+def _gold_hit(n, gold):
+    g = gold[:-3] if gold.endswith(".md") else gold
+    return n[:-3] == g or name_of(n) == g
+
+
+def eval_cases(path):
+    cases, bad = [], []
+    for i, line in enumerate(open(path, encoding="utf-8"), 1):
+        line = line.strip()
+        if not line or line.startswith("//"):
+            continue
+        try:
+            c = json.loads(line)
+        except ValueError as e:
+            bad.append(f"{path}:{i}: {e}"); continue
+        if not isinstance(c.get("q"), str) or not isinstance(c.get("gold"), list):
+            bad.append(f"{path}:{i}: q (text) and gold (list) are required"); continue
+        c.setdefault("id", f"#{i}"); c.setdefault("group", "general")
+        for g in c["gold"]:
+            if not any(_gold_hit(n, g) for n in NOTES):
+                bad.append(f"{c['id']}: gold note not in the vault: {g}")
+        cases.append(c)
+    return cases, bad
+
+
+def run_eval(cases, neg_thr):
+    global SCOPE
+    import time
+    rows = []
+    for c in cases:
+        SCOPE = parse_scope(c.get("scope", "all"))
+        t0 = time.perf_counter()
+        hits = search_rank(c["q"])
+        ms = (time.perf_counter() - t0) * 1000
+        notes, top = [], {}
+        for s, n, *_ in hits:
+            if n not in top:
+                top[n] = s; notes.append(n)
+        r = {"id": c["id"], "group": c["group"], "q": c["q"], "gold": c["gold"], "ms": round(ms),
+             "chars": len(format_hits(c["q"], hits[:12])), "top1": notes[0] if notes else None,
+             "top1_score": round(top[notes[0]], 2) if notes else 0.0}
+        if c["gold"]:
+            r["rank"] = next((i + 1 for i, n in enumerate(notes) if any(_gold_hit(n, g) for g in c["gold"])), None)
+        else:
+            r["pass"] = r["top1_score"] < neg_thr
+        rows.append(r)
+    SCOPE = "all"
+    return rows
+
+
+def eval_metrics(rows):
+    pos = [r for r in rows if r["gold"]]
+    m = {"n": len(pos)}
+    for k in EVAL_KS:
+        m[f"r@{k}"] = round(sum(1 for r in pos if r["rank"] and r["rank"] <= k) / len(pos), 3) if pos else None
+    m["mrr@10"] = round(sum(1 / r["rank"] for r in pos if r["rank"] and r["rank"] <= 10) / len(pos), 3) if pos else None
+    neg = [r for r in rows if not r["gold"]]
+    m["neg"] = f"{sum(r['pass'] for r in neg)}/{len(neg)}" if neg else None
+    m["ms"] = round(sum(r["ms"] for r in rows) / len(rows)) if rows else 0
+    m["chars"] = round(sum(r["chars"] for r in rows) / len(rows)) if rows else 0
+    return m
+
+
+def cmd_evalsearch(a):
+    """Retrieval quality over labelled questions: recall@1/3/5/10, MRR@10, negative cases (no answer in the vault)."""
+    path = _opt(a, "--cases") or EVAL_CASES
+    neg_thr = float(_opt(a, "--neg-threshold") or 5)
+    save, compare, as_json = _opt(a, "--save"), _opt(a, "--compare"), "--json" in a
+    example = f"{EVAL_DIR}/search_cases.example.jsonl"
+    if not os.path.isfile(path) and path == EVAL_CASES and os.path.isfile(example):
+        path = example
+    if not os.path.isfile(path):
+        print(f"no cases file: {path} (format: {example})"); sys.exit(1)
+    cases, bad = eval_cases(path)
+    rows = run_eval(cases, neg_thr)
+    groups = sorted({r["group"] for r in rows})
+    report = {"date": TODAY.isoformat(), "cases": path, "neg_threshold": neg_thr,
+              "all": eval_metrics(rows), "groups": {g: eval_metrics([r for r in rows if r["group"] == g]) for g in groups},
+              "rows": rows}
+    if save:
+        os.makedirs(os.path.dirname(save) or ".", exist_ok=True)
+        json.dump(report, open(save, "w", encoding="utf-8", newline="\n"), ensure_ascii=False, indent=1)
+    if as_json:
+        print(json.dumps(report, ensure_ascii=False, indent=1)); return
+    base = json.load(open(compare, encoding="utf-8")) if compare else None
+    for msg in bad:
+        print("warning:", msg)
+    cols = ["n"] + [f"r@{k}" for k in EVAL_KS] + ["mrr@10", "neg", "ms", "chars"]
+    print(f"Search eval: {len(rows)} cases, {path}" + (f", compared with {compare}" if base else ""))
+    print("| group | " + " | ".join(cols) + " |\n|" + "---|" * (len(cols) + 1))
+
+    def cell(m, b, c):
+        v = m.get(c)
+        if v is None:
+            return "—"
+        if b and isinstance(v, float) and isinstance(b.get(c), float) and v != b[c]:
+            return f"{v} ({v - b[c]:+.3f})"
+        return str(v)
+    for g, m in [("ALL", report["all"])] + list(report["groups"].items()):
+        b = (base["all"] if g == "ALL" else base["groups"].get(g)) if base else None
+        print(f"| {g} | " + " | ".join(cell(m, b, c) for c in cols) + " |")
+    miss = [r for r in rows if r["gold"] and (not r["rank"] or r["rank"] > 3)]
+    if miss:
+        print("\nMisses (gold note not in the top 3):")
+        for r in miss:
+            print(f"- [{r['group']}] {r['id']}: {r['q']}\n    gold: {', '.join(r['gold'])} → rank {r['rank'] or 'none'}; #1: {r['top1']} ({r['top1_score']})")
+    fp = [r for r in rows if not r["gold"] and not r["pass"]]
+    if fp:
+        print(f"\nQuestions without an answer that scored above the threshold ({neg_thr}):")
+        for r in fp:
+            print(f"- {r['id']}: {r['q']} → {r['top1']} ({r['top1_score']})")
+    pos_top = sorted(r["top1_score"] for r in rows if r["gold"] and r["rank"] == 1)
+    neg_top = sorted(r["top1_score"] for r in rows if not r["gold"])
+    if pos_top and neg_top:
+        print(f"\nThreshold check: correct #1 scores min {pos_top[0]} / median {pos_top[len(pos_top) // 2]}; highest score on unanswerable questions {neg_top[-1]}")
+    if base:
+        old = {r["id"]: r.get("rank") for r in base["rows"]}
+        ch = [(r["id"], old.get(r["id"]), r.get("rank")) for r in rows if r["gold"] and r["id"] in old and old[r["id"]] != r.get("rank")]
+        if ch:
+            print("\nCases whose rank changed: " + "; ".join(f"{i} {a or '—'}→{b or '—'}" for i, a, b in ch))
 
 
 def find_note(q):
@@ -805,6 +954,8 @@ if __name__ == "__main__":
             k = int(a[i + 1])
             a = a[:i] + a[i + 2:]
         cmd_search(" ".join(a[1:]), k)
+    elif cmd == "evalsearch":
+        cmd_evalsearch(a[1:])
     elif cmd == "context":
         cmd_context(" ".join(a[1:]))
     elif cmd == "tasks":
