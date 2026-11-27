@@ -130,7 +130,7 @@ Open the vault in Claude Code and type `/sb-`, or in Codex invoke `$sb-ask` or d
 | `/sb-challenge` | `<note \| idea text> [--save]` | Red-teams an idea or decision: assumptions, weak points, counter-evidence, cheapest test |
 | `/sb-emerge` | `[MOC name \| area] [--save]` `[--scope personal\|work\|all]` | Finds cross-project patterns, recurring questions and new idea combinations |
 | `/sb-new` | `<project\|research\|idea\|moc> <name> [goal]` `[--scope personal\|work\|all]` | New project/research/idea/MOC in the right area: folder, hub from template, MOC link |
-| `/sb-brief` | `<hub> [--update]` | Current state of a project: goal, decisions, open questions, next steps, risks |
+| `/sb-brief` | `<hub> [--update \| --handoff]` | Current state of a project: goal, decisions, open questions, next steps, risks; `--handoff`: a handoff note to the project memory at the end of a session |
 | `/sb-decide` | `<hub> "<decision>" \| review` | Logs a decision or walks through pending (`proposed`) decisions to accept/reject |
 | `/sb-experiment` | `<hub> "<experiment>" [result \| file]` | Adds an experiment to the hub's log or records its result against the hypotheses |
 | `/sb-task` | `<task \| free text> [--project <Hub>] [--yes]` `[--scope personal\|work\|all]` | Creates (in the project's area), updates or moves board cards; extracts several tasks from free text |

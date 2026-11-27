@@ -48,7 +48,7 @@ Maximum depth is `Area/Category/Project/note`. Don't create new top-level folder
 ## 2. Metadata schema
 | Field | Values |
 |---|---|
-| `type` | project · research · task · idea · knowledge · source · resource · moc · system · decision · analysis · meeting (work meeting) · org (organization/person card) |
+| `type` | project · research · task · idea · knowledge · source · resource · moc · system · decision · analysis · meeting (work meeting) · org (organization/person card) · memory (project memory) |
 | `status` | task: todo · doing · done (board columns To Do / In Progress / Done; `backlog` and `blocked` are valid and show in an "Other" column) — project/research: active · paused · done · archived — knowledge: seed · evergreen — idea: idea · exploring · promoted · dropped — decision: proposed · accepted · rejected · superseded |
 | `project` | `"[[Hub]]"` for notes, tasks and decisions that belong to a project |
 | `topics` | list of `"[[MOC - …]]"` |
@@ -69,6 +69,7 @@ python "99 System/scripts/vault_tool.py" search <query> [--k N] [--explain]   # 
 python "99 System/scripts/vault_tool.py" evalsearch [--compare F]  # search quality on 99 System/eval/search_cases.jsonl (recall@K, MRR); run before and after changing search
 python "99 System/scripts/vault_tool.py" context <note>           # outline, links, backlinks
 python "99 System/scripts/vault_tool.py" pack [--project <Hub>]   # budgeted context: L0 vault overview (~2.5 KB) / L1 project pack (~7 KB)
+python "99 System/scripts/vault_tool.py" memory <Hub> [--init] [--since]  # project memory; --since: changes since the last session
 python "99 System/scripts/vault_tool.py" tasks [--project X] [--json]
 python "99 System/scripts/vault_tool.py" lint                     # writes Health.md
 python "99 System/scripts/vault_tool.py" index                    # writes Index.md
@@ -90,6 +91,7 @@ Format settings in `99 System/config.json`: `format_check` (default false; when 
 Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Status · Decisions (embedded Base) · Open questions · Tasks (sb-board) · Experiment log · Related.
 - **Task card** (`Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/<short title>.md`, by the project's area; folder root without a project. When a card's `project` changes, the board plugin moves it to the new project folder): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.
 - **Decision note** (Personal: `Decision - <short name>.md`; Work: `ADR-NNN - <short name>.md`; in the hub folder): `type: decision`, `project`, `status`, `origin`, `decided` (only if known); body: Decision · Rationale · Source · Alternatives.
+- **Project memory** (`Memory - <Hub>.md` in the project folder, template `Project Memory`): `type: memory`, `project`; body: Pinned (dated temporary context, deleted when the work is done) · Sessions (newest last, `### YYYY-MM-DD — title (Claude)`) · Dead ends. Decisions, the board and open questions are not repeated there. When a piece of work that wrote to a project ends, suggest `/sb-brief <hub> --handoff` to the user; never write it without approval.
 - **Analysis note** (`Personal/70 Analyses/` or `Work/70 Analyses/<YYYY-MM-DD> - <title>.md`): `type: analysis`, `source` names the command that produced it; cite a `[[note]]` for every claim.
 - **Meeting note** (Work): `type: meeting`, `project`; body: Notes · Decisions · Action items (action items can become task cards).
 - **Organization card** (Work): `type: org`; body: Role · Linked notes · People.

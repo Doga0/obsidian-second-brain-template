@@ -115,7 +115,7 @@ STATUS = {
     "decision": ["proposed", "accepted", "rejected", "superseded"],
 }
 TYPES = ["project", "research", "task", "idea", "knowledge", "source", "resource", "moc", "system", "decision",
-         "analysis", "meeting", "org"]
+         "analysis", "meeting", "org", "memory"]
 ENUMS = {"type": TYPES, "priority": ["high", "medium", "low"], "origin": ["user", "ai-suggestion"],
          "ai": ["connect", "distill", "challenge", "summarize", "ingest", "brief"]}
 DATES = {"due", "started", "completed", "decided", "created"}
@@ -381,6 +381,10 @@ def t_create_note(a):
             raise ValueError(t("template", tpl, ", ".join(avail)))
         text = open(os.path.join(tdir, tpl + ".md"), encoding="utf-8").read()
         text = text.replace("{{title}}", title).replace("{{date}}", today())
+        if "{{project}}" in text:  # Project Memory: the project it belongs to
+            proj = re.sub(r"[\[\]\"]", "", str(props.get("project") or "")).split("|")[0].strip()
+            proj = proj or (M.LOCK["projects"][0] if len(M.LOCK["projects"]) == 1 else os.path.basename(folder))
+            text = text.replace("{{project}}", proj)
         for ph in PLACEHOLDERS:
             text = text.replace(ph, folder)
         for ph in NAME_HOLDERS:
@@ -624,7 +628,7 @@ def tools(mod):
     obj = lambda props, req: {"type": "object", "properties": props, "required": req}
     D = {
         "tr": {
-            "create": "YENİ not oluşturur (üzerine yazmaz). folder: alan/kategori[/proje] (örn. Kişisel/40 Knowledge, Kişisel/20 Projects/<Ad>). template: 99 System/Templates'teki ad (Project Hub, Research Hub, Knowledge Note, Decision, Analysis, MOC, Meeting, Org, Source Note); yer tutucular doldurulur. content başlık (##) içeriyorsa şablonun gövdesinin yerine geçer (doldurulmuş şablon), yoksa sona eklenir. properties: frontmatter (şema dışı alan reddedilir). Proje hub'ı oluşturmak da bununla (template=Project Hub). Kilitte not kilitli projeye bağlanır.",
+            "create": "YENİ not oluşturur (üzerine yazmaz). folder: alan/kategori[/proje] (örn. Kişisel/40 Knowledge, Kişisel/20 Projects/<Ad>). template: 99 System/Templates'teki ad (Project Hub, Research Hub, Knowledge Note, Decision, Analysis, MOC, Meeting, Org, Source Note, Project Memory); yer tutucular doldurulur. content başlık (##) içeriyorsa şablonun gövdesinin yerine geçer (doldurulmuş şablon), yoksa sona eklenir. properties: frontmatter (şema dışı alan reddedilir). Proje hub'ı oluşturmak da bununla (template=Project Hub). Kilitte not kilitli projeye bağlanır.",
             "prop": "Frontmatter alanı ayarlar/kaldırır (şemaya göre doğrulanır; project var olmalı). Görev/karar status değişikliği ve görev kartının project değişikliği confirm=true ister; görevde done→completed, doing→started, kararda accepted→decided otomatik eklenir.",
             "edit": "Bir notta birebir ve tekil bir metin parçasını değiştirir (tablo satırı doldurma, checklist işaretleme…). Frontmatter için vault_set_property. type: source notlarında yalnızca Bağlam callout'u düzenlenebilir.",
             "append": "Bir başlığın (heading) altındaki bölümün sonuna metin ekler; başlık yoksa sona ## başlık açar. Mevcut metni silmez.",
@@ -635,7 +639,7 @@ def tools(mod):
             "common": " expected_sha: vault_read_note'un verdiği sha (not değiştiyse reddeder). dry_run=true: yazmadan diff gösterir.",
         },
         "en": {
-            "create": "Creates a NEW note (never overwrites). folder: area/category[/project] (e.g. Personal/40 Knowledge, Personal/20 Projects/<Name>). template: a name from 99 System/Templates (Project Hub, Research Hub, Knowledge Note, Decision, Analysis, MOC, Meeting, Org, Source Note); placeholders are filled. If content has headings (##) it replaces the template body (a filled-in template), otherwise it is appended. properties: frontmatter (keys outside the schema are refused). Also creates project hubs (template=Project Hub). Under a lock the note belongs to a locked project.",
+            "create": "Creates a NEW note (never overwrites). folder: area/category[/project] (e.g. Personal/40 Knowledge, Personal/20 Projects/<Name>). template: a name from 99 System/Templates (Project Hub, Research Hub, Knowledge Note, Decision, Analysis, MOC, Meeting, Org, Source Note, Project Memory); placeholders are filled. If content has headings (##) it replaces the template body (a filled-in template), otherwise it is appended. properties: frontmatter (keys outside the schema are refused). Also creates project hubs (template=Project Hub). Under a lock the note belongs to a locked project.",
             "prop": "Sets/removes a frontmatter key (validated against the schema; project must exist). Task/decision status changes and a task card's project change need confirm=true; task done→completed, doing→started and decision accepted→decided are added automatically.",
             "edit": "Replaces an exact, unique piece of text in a note (fill a table row, tick a checklist item…). Use vault_set_property for frontmatter. In type: source notes only the Context callout can be edited.",
             "append": "Appends text at the end of the section under a heading; if the heading is missing, adds a ## heading at the end. Never removes text.",

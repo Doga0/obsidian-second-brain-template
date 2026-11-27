@@ -13,6 +13,7 @@ Commands
                                  Search quality on labelled questions (99 System/eval/search_cases.jsonl): recall@K, MRR, negatives
   pack [--project X] [--budget N] [--only "A|B"] [--hook]
                                  Budgeted context: L0 vault overview (default) or L1 project pack; --hook = SessionStart JSON
+  memory <Hub> [--init] [--since]  Project memory: pins, session handoffs, dead ends; --since = changes since the last session
   context <note>                 Frontmatter, outline, outgoing links and backlinks of a note
   tasks [--project X] [--json]   Task board as text + last-7-days activity
   queue                          Pending AI requests (`ai:` property + AI Queue checklist)
@@ -95,7 +96,7 @@ PROTECTED = CFG["protected"]
 WIP_LIMIT = CFG.get("wip_limit")
 
 TYPES = {"project", "research", "task", "idea", "knowledge", "source", "resource", "moc",
-         "system", "decision", "analysis", "meeting", "org"}
+         "system", "decision", "analysis", "meeting", "org", "memory"}
 STATUS = {
     "task": {"backlog", "todo", "doing", "blocked", "done"},
     "project": {"active", "paused", "done", "archived"},
@@ -339,10 +340,14 @@ def cmd_lint(write=True):
     for n in NOTES:
         if is_template(n) or not in_scope(n) or n.startswith(SYSTEM + "/") or n.startswith(INBOXES) or os.path.basename(n) in skip:
             continue
-        if frontmatter(n)[0].get("type") in ("decision", "task", "analysis"):
+        if frontmatter(n)[0].get("type") in ("decision", "task", "analysis", "memory"):
             continue  # shown through embedded Bases / boards
         if not back.get(n):
             issues["Orphan notes (no incoming links)"].append(f"[[{name_of(n)}]]")
+    # project memory: pins are temporary by design
+    for proj, pin_date, line in all_pins():
+        if pin_date and (TODAY - datetime.date.fromisoformat(pin_date)).days >= PIN_MAX_AGE:
+            issues[f"Pins older than {PIN_MAX_AGE} days (project memory)"].append(f"[[{MEM_PREFIX}{proj}]] — {_clip(line, 120)}")
     # stale hubs
     for typ in ("project", "research"):
         for n, fm in by_type[typ]:
@@ -431,11 +436,11 @@ def cmd_index():
             continue
         fm, body = frontmatter(n)
         areas[area_of(n)][fm.get("type", "untyped")].append((n, fm, body))
-    order = ["moc", "project", "research", "task", "decision", "meeting", "org", "knowledge", "idea", "source", "analysis", "resource", "system", "untyped"]
+    order = ["moc", "project", "research", "task", "decision", "memory", "meeting", "org", "knowledge", "idea", "source", "analysis", "resource", "system", "untyped"]
     title = {"moc": "Maps (MOC)", "project": "Projects", "research": "Research", "task": "Tasks", "decision": "Decisions",
              "meeting": "Meetings", "org": "Organizations & people",
              "knowledge": "Knowledge", "idea": "Ideas", "source": "Sources", "analysis": "Analyses",
-             "resource": "Resources", "system": "System", "untyped": "Inbox / untyped"}
+             "resource": "Resources", "system": "System", "memory": "Project memory", "untyped": "Inbox / untyped"}
     area_title = {"personal": "Personal", "work": "Work", "shared": "Shared (system)"}
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     out = ["---", "type: system", "generated: true", "---", *(["# Index", ""] if CFG["title_heading"] else []),
@@ -488,7 +493,7 @@ STOPWORDS = {norm(w) for w in (
 NOW_WORDS = [norm(w) for w in ("current", "currently", "now", "right now", "latest", "still", "today", "valid", "these days")]
 TYPE_WORDS = {"decision": "decision adr", "task": "task", "meeting": "meeting", "knowledge": "knowledge concept",
               "project": "project", "research": "research", "idea": "idea", "analysis": "analysis",
-              "org": "organization", "source": "source"}
+              "org": "organization", "source": "source", "memory": "memory session handoff"}
 SEARCH_CFG = {"type_weight": {"system": 0.6, "source": 0.85, "analysis": 0.9, "moc": 0.9},
               "stale": ["superseded", "rejected", "dropped", "archived"], "stale_weight": 0.6, "done_task_weight": 0.85,
               "now_live": ["accepted", "active", "doing", "evergreen"], "now_live_weight": 1.3, "now_stale_weight": 0.45,
@@ -1003,6 +1008,9 @@ def pack_l0(only=None):
             live.append(line)
         else:
             rest.append(f"{name} ({st})")
+    pins = all_pins(only)
+    if pins:
+        out += ["## Pinned (from project memory)"] + [f"- {p}: {_clip(l.lstrip('- '), 160)}" for p, _, l in pins[:8]] + [""]
     out += ["## Active projects"] + (live or ["- (none)"])
     if rest:
         out += ["", "## Other projects", "- " + " · ".join(rest)]
@@ -1038,6 +1046,11 @@ def pack_l1(project, budget=7000, log_n=8):
         if t:
             parts.append((prio, f"## {title} ({name}.md:{ln})", _clip(t, cap)))
     sec("goal", "Goal", 0, 500)
+    mem = memory_summary(name)
+    if mem:
+        parts.append((1, "## Memory (pins, recent sessions, dead ends)", mem))
+    else:
+        parts.append((5, "## Memory", f"None yet: `vault_tool.py memory \"{name}\" --init`; at the end of a session `/sb-brief {name} --handoff`."))
     sec("status", "Status", 1, 1200)
     decs = []
     for n, typ in members:
@@ -1076,7 +1089,7 @@ def pack_l1(project, budget=7000, log_n=8):
     lg = [re.sub(r"\s+", " ", _plain(l))[:170] for l in log_lines([name_of(n) for n, _ in members], log_n)]
     if lg or recent:
         parts.append((4, "## Recent changes", "\n".join((["Log:"] + lg if lg else []) + (["Notes (modified):"] + recent if recent else []))))
-    others = [f"[[{name_of(n)}]]" for n, typ in members if typ not in ("task", "decision") and n != hub]
+    others = [f"[[{name_of(n)}]]" for n, typ in members if typ not in ("task", "decision", "memory") and n != hub]
     if others:
         parts.append((5, "## Project notes", ", ".join(others[:25]) + (f" … +{len(others) - 25}" if len(others) > 25 else "")))
     head = [f"# Context L1 — {name} ({TODAY.isoformat()})", PACK_HEAD,
@@ -1108,6 +1121,145 @@ def cmd_pack(a):
             pass
         return
     print(pack_l1(proj, int(budget or 7000)) if proj else pack_l0(only))
+
+
+# ------------------------------------------------------------ project memory (session handoff)
+# One `type: memory` note per project (`Memory - <Project>.md` in the project folder) holding only what lives nowhere
+# else: pins (temporary context that must survive compaction), session handoffs, dead ends. Decisions, board and open
+# questions stay in the hub / decision notes and reach the agent through `pack`. Pins adapted from
+# eugeniughelbur/obsidian-second-brain (PINNED.md, session digests); bounded recent context from
+# AgriciDaniel/claude-obsidian (hot.md). Both MIT.
+MEM_SECTIONS = {"pins": ("pinned",), "sessions": ("sessions",), "dead": ("dead ends",)}
+MEM_PREFIX = "Memory - "
+PIN_MAX_AGE = 14
+DATE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})")
+
+
+def memory_note(project):
+    """Path of the project's memory note (type: memory, project: [[project]]) or None."""
+    for n in NOTES:
+        if is_template(n):
+            continue
+        fm, _ = frontmatter(n)
+        if fm.get("type") == "memory" and norm(_proj(fm)) == norm(project):
+            return n
+    return None
+
+
+def memory_parts(mem):
+    """{"pins": [(date|None, line)], "sessions": [(date|None, title, body)], "dead": [line], "line": {key: line no}}"""
+    out = {"pins": [], "sessions": [], "dead": [], "line": {}}
+    lvl = {ln: lv for ln, lv, _ in headings(mem)}
+    blocks, cur = [], None  # (key, body incl. deeper sub-headings such as ### session titles)
+    for ln, h, body in list(sections(mem))[1:]:
+        key = next((k for k, names in MEM_SECTIONS.items() if norm(h).strip() in {norm(x) for x in names}), None)
+        if key:
+            cur = [key, ln, lvl.get(ln, 2), body.splitlines()[1:]]
+            blocks.append(cur)
+        elif cur and lvl.get(ln, 0) > cur[2]:
+            cur[3] += body.splitlines()
+        else:
+            cur = None
+    for key, ln, _, body_lines in blocks:
+        out["line"][key] = ln
+        lines = [l for l in body_lines if l.strip() and not l.strip().startswith("<!--")]
+        if key == "pins":
+            out["pins"] = [(DATE_RE.search(l).group(1) if DATE_RE.search(l) else None, l.strip()) for l in lines if l.strip().startswith("-")]
+        elif key == "dead":
+            out["dead"] = [l.rstrip() for l in lines]
+        else:
+            cur = None
+            for l in lines:
+                m = re.match(r"^###\s+(.*)$", l)
+                if m:
+                    d = DATE_RE.search(m.group(1))
+                    cur = [d.group(1) if d else None, m.group(1).strip(), []]
+                    out["sessions"].append(cur)
+                elif cur is not None:
+                    cur[2].append(l.rstrip())
+            out["sessions"] = [(d, t, "\n".join(b)) for d, t, b in out["sessions"]]
+    return out
+
+
+def memory_changes(project, since):
+    """What changed in the project after `since` (YYYY-MM-DD, exclusive): Log entries, notes by mtime, task moves."""
+    hub, members = project_notes(project)
+    names = [name_of(n) for n, _ in members]
+    logs = [l for l in log_lines(names, 400) if (DATE_RE.search(l) and DATE_RE.search(l).group(1) > since)] if since else log_lines(names, 10)
+    notes = sorted(((mtime(n).isoformat(), n) for n, t in members if t not in ("memory",) and (not since or mtime(n).isoformat() > since)), reverse=True)
+    tasks = [r for r in task_rows(name_of(hub)) if since and ((r["completed"] and r["completed"] > since) or (r["started"] and r["started"] > since))]
+    return logs, notes, tasks
+
+
+def memory_summary(project, sessions=2, cap=1800):
+    """Text block for pack L1, or None when the project has no memory note."""
+    mem = memory_note(project)
+    if not mem:
+        return None
+    p = memory_parts(mem)
+    last = next((d for d, _, _ in reversed(p["sessions"]) if d), None)
+    _, notes, _ = memory_changes(project, last) if last else (None, [], None)
+    head = [f"`{mem}` · last session: {last or '—'}" + (f" · {len(notes)} notes changed since" if last and notes else "")]
+    if p["pins"]:
+        head += ["Pinned:"] + [l for _, l in p["pins"]]
+    for d, t, b in p["sessions"][-sessions:]:
+        head += [f"Session {t}:", _clip(b, 600)]
+    if p["dead"]:
+        head += ["Dead ends:"] + p["dead"][:6] + ([f"… +{len(p['dead']) - 6}"] if len(p["dead"]) > 6 else [])
+    return _clip("\n".join(head), cap)
+
+
+def all_pins(only=None):
+    """[(project, date, line)] from every memory note (L0 shows them so they survive compaction)."""
+    out = []
+    for n in NOTES:
+        if is_template(n) or not in_scope(n):
+            continue
+        fm, _ = frontmatter(n)
+        if fm.get("type") != "memory" or (only and norm(_proj(fm)) not in {norm(x) for x in only}):
+            continue
+        out += [(_proj(fm), d, l) for d, l in memory_parts(n)["pins"]]
+    return out
+
+
+def cmd_memory(a):
+    """memory <Hub> [--init] [--since]"""
+    init, since = "--init" in a, "--since" in a
+    a = [x for x in a if x not in ("--init", "--since")]
+    hub, _ = project_notes(" ".join(a))
+    if not hub:
+        print("project not found: " + " ".join(a)); sys.exit(1)
+    name = name_of(hub)
+    mem = memory_note(name)
+    if init:
+        if mem:
+            print(f"already exists: {mem}"); return
+        folder = os.path.dirname(hub) if os.path.basename(os.path.dirname(hub)) == name else None
+        if not folder:
+            print(f"the project has no folder of its own ({hub}); create the memory note by hand"); sys.exit(1)
+        path = f"{folder}/{MEM_PREFIX}{name}.md"
+        t = open(f"{TEMPLATES}/Project Memory.md", encoding="utf-8").read()
+        t = t.replace("{{project}}", name).replace("{{date}}", TODAY.isoformat()).replace("{{title}}", f"{MEM_PREFIX}{name}")
+        if not CFG["title_heading"]:
+            t = vf.strip_title(t, f"{MEM_PREFIX}{name}")
+        open(path, "w", encoding="utf-8", newline="\n").write(t)
+        cmd_log("memory", f"[[{MEM_PREFIX}{name}]] created (project memory of [[{name}]])")
+        print(path); return
+    if not mem:
+        print(f"{name} has no memory note yet. Create it: vault_tool.py memory \"{name}\" --init"); return
+    p = memory_parts(mem)
+    last = next((d for d, _, _ in reversed(p["sessions"]) if d), None)
+    if since:
+        logs, notes, tasks = memory_changes(name, last)
+        print(f"# {name}: since the last session ({last or 'none recorded'})")
+        print("\n## Log"); print("\n".join(re.sub(r"\s+", " ", _plain(l))[:200] for l in logs) or "- (none)")
+        print("\n## Changed notes"); print("\n".join(f"- {d} [[{name_of(n)}]] ({frontmatter(n)[0].get('type', '—')})" for d, n in notes[:20]) or "- (none)")
+        print("\n## Task moves"); print("\n".join(f"- [{r['status']}] {r['task']}" + (f" · started {r['started']}" if r["started"] and last and r["started"] > last else "") + (f" · done {r['completed']}" if r["completed"] and last and r["completed"] > last else "") for r in tasks) or "- (none)")
+        old = [l for d, l in p["pins"] if d and (TODAY - datetime.date.fromisoformat(d)).days >= PIN_MAX_AGE]
+        if old:
+            print(f"\n## Pins older than {PIN_MAX_AGE} days (clear them?)"); print("\n".join(old))
+        return
+    print(memory_summary(name, sessions=3, cap=6000))
 
 
 def cmd_history(a):
@@ -1281,6 +1433,8 @@ if __name__ == "__main__":
         af = _opt(a, "--allow")
         allow = {l.strip() for l in open(af, encoding="utf-8") if l.strip()} if af else None
         cmd_search(" ".join(a[1:]), k, ex, allow)
+    elif cmd == "memory":
+        cmd_memory(a[1:])
     elif cmd == "pack":
         cmd_pack(a[1:])
     elif cmd == "evalsearch":
