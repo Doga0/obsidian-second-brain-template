@@ -15,5 +15,6 @@ description: "Second Brain — Weekly review. Scans active projects, upcoming an
    - **Board**: done / started / blocked this week, overdue cards, deadlines that have no card (suggest `/sb-task` or `/sb-plan`)
    - **Projects**: 1–2 lines each with status, task progress (done/total) and blockers
    - **Maintenance**: Inbox count, AI queue, seed notes, Health issues
+   - **Freshness** (5 lines max, `vault_tool.py fresh`): notes to review, lines resting on an invalid decision, undated changing claims; one suggested move for each (still holds → `fresh --reviewed`; observe again · pointer · dated note). Leave the section out if the list is empty.
    - **AI observation**: one cross-project pattern or risk, labelled as such
 6. With `--no-save`, show it in the chat only. If saved, run `log review "<date>"`.

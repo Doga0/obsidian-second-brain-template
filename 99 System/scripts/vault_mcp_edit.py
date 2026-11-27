@@ -118,10 +118,10 @@ TYPES = ["project", "research", "task", "idea", "knowledge", "source", "resource
          "analysis", "meeting", "org", "memory"]
 ENUMS = {"type": TYPES, "priority": ["high", "medium", "low"], "origin": ["user", "ai-suggestion"],
          "ai": ["connect", "distill", "challenge", "summarize", "ingest", "brief"]}
-DATES = {"due", "started", "completed", "decided", "created"}
+DATES = {"due", "started", "completed", "decided", "created", "reviewed"}
 LISTS = {"topics", "aliases"}
 KEYS = ["type", "status", "priority", "due", "started", "completed", "project", "topics", "source", "origin",
-        "ai", "ai_note", "aliases", "summary", "decided", "created"]
+        "ai", "ai_note", "aliases", "summary", "decided", "created", "reviewed"]
 PLACEHOLDERS = ("KLASÖR-YOLU", "FOLDER-PATH")
 NAME_HOLDERS = ("PROJE-ADI", "PROJECT-NAME")
 

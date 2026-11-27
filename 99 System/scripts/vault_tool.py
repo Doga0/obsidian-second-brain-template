@@ -14,6 +14,7 @@ Commands
   pack [--project X] [--budget N] [--only "A|B"] [--hook]
                                  Budgeted context: L0 vault overview (default) or L1 project pack; --hook = SessionStart JSON
   memory <Hub> [--init] [--since]  Project memory: pins, session handoffs, dead ends; --since = changes since the last session
+  fresh [--json] | fresh --reviewed <note>  Knowledge lifecycle: notes to review, lines resting on invalid decisions, undated changing claims
   context <note>                 Frontmatter, outline, outgoing links and backlinks of a note
   tasks [--project X] [--json]   Task board as text + last-7-days activity
   queue                          Pending AI requests (`ai:` property + AI Queue checklist)
@@ -94,6 +95,7 @@ def load_config():
 CFG = load_config()
 PROTECTED = CFG["protected"]
 WIP_LIMIT = CFG.get("wip_limit")
+RAW_CFG = CFG  # the whole config.json ("search", "freshness", …)
 
 TYPES = {"project", "research", "task", "idea", "knowledge", "source", "resource", "moc",
          "system", "decision", "analysis", "meeting", "org", "memory"}
@@ -344,6 +346,14 @@ def cmd_lint(write=True):
             continue  # shown through embedded Bases / boards
         if not back.get(n):
             issues["Orphan notes (no incoming links)"].append(f"[[{name_of(n)}]]")
+    # knowledge lifecycle: suggestions only (details and fixes: `vault_tool.py fresh`)
+    fr = fresh_report()
+    for r in sorted(fr["review"], key=lambda r: -r["days"]):
+        issues["Notes to review (freshness)"].append(f"[[{name_of(r['note'])}]] — not looked at for {r['days']} days (window {r['window']}); if it still holds `fresh --reviewed`")
+    for r in fr["invalid"]:
+        issues["Lines resting on an invalid decision"].append(f"[[{name_of(r['note'])}]]:{r['line']} → [[{r['target']}]] ({r['why']})")
+    for r in fr["claims"]:
+        issues["Date stamp issues (freshness)"].append(f"[[{name_of(r['note'])}]]:{r['line']} — {FRESH_KIND[r['kind']]}: {r['text']}")
     # project memory: pins are temporary by design
     for proj, pin_date, line in all_pins():
         if pin_date and (TODAY - datetime.date.fromisoformat(pin_date)).days >= PIN_MAX_AGE:
@@ -517,7 +527,7 @@ def note_meta(n):
     fm, _ = frontmatter(n)
     typ = "system" if n in SYSTEM_NOTES or name_of(n).startswith("README") else str(fm.get("type", "") or "")
     proj = re.sub(r"[\[\]\"]", "", str(fm.get("project", "") or "")).split("|")[0]
-    when = next((str(fm[k])[:10] for k in ("decided", "completed", "updated", "created") if fm.get(k)), None)
+    when = next((str(fm[k])[:10] for k in ("reviewed", "decided", "completed", "updated", "created") if fm.get(k)), None)
     sup = fm.get("supersedes", [])
     sup = [re.sub(r"[\[\]\"]", "", x).split("|")[0] for x in (sup if isinstance(sup, list) else [sup]) if x]
     return {"type": typ, "status": str(fm.get("status", "") or ""), "project": proj, "when": when, "supersedes": sup}
@@ -1262,6 +1272,173 @@ def cmd_memory(a):
     print(memory_summary(name, sessions=3, cap=6000))
 
 
+# ------------------------------------------------------------ knowledge lifecycle (freshness)
+# Nothing is ever changed or deleted here: the checks only suggest what to review, with the reason.
+#   review   notes not looked at for longer than their type's window (reviewed: > last modified)
+#   invalid  notes that link to a superseded/rejected decision (or to a note another note supersedes)
+#   claims   line-level: a number about something that changes (open tasks, users, price…) with no date stamp,
+#            outside a dated container; stamps older than the window; impossible dates
+# Line rules adapted from eugeniughelbur/obsidian-second-brain (freshness-policy.md, freshness_lint.py: every stored
+# fact is timeless, dated, or a pointer; dated containers are history; `<!-- freshness: example -->`). MIT.
+FRESH_CFG = {
+    "review_days": {"knowledge": 180, "resource": 120, "org": 180, "idea": 120, "moc": 180},
+    "stamp_days": 30,
+    "volatile": ["open task", "task", "card", "issue", "pr", "ticket", "user", "customer", "case", "star", "download",
+                 "subscriber", "price", "balance", "cost", "fee", "deal"],
+}
+_fc = RAW_CFG.get("freshness") if isinstance(RAW_CFG.get("freshness"), dict) else {}
+for _k, _v in _fc.items():
+    if _k == "review_days" and isinstance(_v, dict):
+        FRESH_CFG["review_days"].update(_v)
+    elif _k == "volatile_extra" and isinstance(_v, list):
+        FRESH_CFG["volatile"] += [str(x) for x in _v]
+    elif _k in FRESH_CFG:
+        FRESH_CFG[_k] = _v
+DATED_TYPES = {"meeting", "analysis", "source", "task", "memory", "system", "decision"}  # history, raw, transient, or own lifecycle
+STAMP_RE = re.compile(r"(?:as of|on)\s+(\d{4}-\d{2}(?:-\d{2})?)|(\d{4}-\d{2}-\d{2})\s*(?:snapshot)", re.I)
+ANY_DATE_RE = re.compile(r"\b(\d{4})-(\d{2})-(\d{2})\b")
+EXAMPLE_TAG = "<!-- freshness: example -->"
+
+
+def _volatile_re():
+    nouns = sorted({norm(x) for x in FRESH_CFG["volatile"]}, key=len, reverse=True)
+    alts = [re.escape(x) + (r"s?(?![a-z])" if len(x) <= 3 else r"\w*") for x in nouns]  # short words (pr) only whole
+    return re.compile(r"(?<![\w.,])(\d[\d.,]*)\s*(" + "|".join(alts) + r")")
+
+
+def _dated(s):
+    return bool(ANY_DATE_RE.search(s) or re.search(r"\b(19|20)\d{2}\b", s))
+
+
+def claim_issues(n, body_lines, offset):
+    """[(line no, kind, text)] for one note. kind: stamp-missing | stamp-old | bad-date | unused-example"""
+    out, vre = [], _volatile_re()
+    fence = False
+    heading_dated = False
+    exp_log = False
+    for i, line in enumerate(body_lines):
+        ln = offset + i
+        st = line.strip()
+        if st.startswith("```"):
+            fence = not fence
+            continue
+        if fence or not st or st.startswith(("%%", "<!--")) and EXAMPLE_TAG not in st:
+            continue
+        m = re.match(r"^#{1,6}\s+(.*)", st)
+        if m:
+            heading_dated = _dated(m.group(1))
+            exp_log = norm(m.group(1)).startswith("experiment log")
+            continue
+        for y, mo, d in ANY_DATE_RE.findall(line):
+            try:
+                datetime.date(int(y), int(mo), int(d))
+            except ValueError:
+                out.append((ln, "bad-date", f"{y}-{mo}-{d}"))
+        sm = STAMP_RE.search(line)
+        if sm:
+            ds = sm.group(1) or sm.group(2)
+            try:
+                dd = datetime.date.fromisoformat(ds if len(ds) == 10 else ds + "-01")
+                if (TODAY - dd).days > FRESH_CFG["stamp_days"]:
+                    out.append((ln, "stamp-old", _clip(st, 140)))
+            except ValueError:
+                pass
+        if heading_dated or exp_log or st.startswith(">") or st.startswith("|") and exp_log:
+            continue
+        hit = vre.search(norm(re.sub(r"`[^`]*`", "", line)))
+        example = EXAMPLE_TAG in line
+        if hit and not _dated(line) and not sm:
+            if not example:
+                out.append((ln, "stamp-missing", _clip(st, 140)))
+        elif example:
+            out.append((ln, "unused-example", _clip(st, 100)))
+    return out
+
+
+def _decisions_invalid():
+    """{note name: reason} for notes that no longer hold: superseded/rejected decisions, targets of `supersedes`."""
+    out = {}
+    for n in NOTES:
+        if is_template(n):
+            continue
+        fm, _ = frontmatter(n)
+        if fm.get("type") == "decision" and fm.get("status") in ("superseded", "rejected"):
+            out[name_of(n)] = fm.get("status")
+        sup = fm.get("supersedes", [])
+        for x in (sup if isinstance(sup, list) else [sup]):
+            x = re.sub(r"[\[\]\"]", "", str(x)).split("|")[0].strip()
+            if x:
+                out.setdefault(x, f"replaced by {name_of(n)}")
+    return out
+
+
+def fresh_report(only=None):
+    """{"review": [...], "invalid": [...], "claims": [...]} — suggestions only."""
+    rep = {"review": [], "invalid": [], "claims": []}
+    invalid = _decisions_invalid()
+    for n in NOTES:
+        if is_template(n) or not in_scope(n) or n in (INDEX, HEALTH, LOG) or n.startswith(INBOXES):
+            continue
+        if only and n not in only:
+            continue
+        fm, body = frontmatter(n)
+        typ = str(fm.get("type", "") or "")
+        rev = str(fm.get("reviewed", "") or "")[:10]
+        last = max(filter(None, [rev, mtime(n).isoformat()]))
+        win = FRESH_CFG["review_days"].get(typ)
+        if win and (TODAY - datetime.date.fromisoformat(last)).days > win:
+            rep["review"].append({"note": n, "type": typ, "last": last, "reviewed": rev or None, "days": (TODAY - datetime.date.fromisoformat(last)).days, "window": win})
+        if typ not in ("decision", "analysis", "memory", "source") and not (typ == "task" and fm.get("status") == "done") and name_of(n) not in invalid:
+            for i, line in enumerate(text(n).splitlines(), 1):
+                for target in LINK_RE.findall(line):
+                    t = target.split("|")[0].split("#")[0].split("/")[-1].strip()
+                    if t in invalid and not re.search(r"superseded|rejected|replaced|invalid|obsolete|formerly|instead|old\b", line, re.I):
+                        rep["invalid"].append({"note": n, "line": i, "target": t, "why": invalid[t], "text": _clip(line.strip(), 140)})
+        dated_name = bool(re.match(r"^\d{4}-\d{2}-\d{2}", name_of(n)))
+        if typ in DATED_TYPES or dated_name or fm.get("freshness") == "snapshot":
+            continue
+        head_len = text(n).count("\n") - body.count("\n")
+        for ln, kind, txt in claim_issues(n, body.splitlines(), head_len + 1):
+            rep["claims"].append({"note": n, "line": ln, "kind": kind, "text": txt})
+    return rep
+
+
+FRESH_KIND = {"stamp-missing": "undated changing claim", "stamp-old": "old stamp", "bad-date": "impossible date",
+              "unused-example": "unused `freshness: example` marker"}
+
+
+def cmd_fresh(a):
+    """fresh [--json] · fresh --reviewed <note>"""
+    if "--reviewed" in a:
+        target = _one_note(" ".join(x for x in a if x != "--reviewed"))
+        t = text(target)
+        m = re.match(r"^---\r?\n(.*?)\r?\n---\r?\n", t, re.S)
+        if not m:
+            print("no frontmatter: " + target); sys.exit(1)
+        fm_txt = m.group(1)
+        line = f"reviewed: {TODAY.isoformat()}"
+        fm_new = re.sub(r"(?m)^reviewed:.*$", line, fm_txt) if re.search(r"(?m)^reviewed:", fm_txt) else fm_txt + ("\r\n" if "\r\n" in t else "\n") + line
+        open(target, "w", encoding="utf-8", newline="").write(t[:m.start(1)] + fm_new + t[m.end(1):])
+        cmd_log("fresh", f"[[{name_of(target)}]] reviewed (reviewed: {TODAY.isoformat()})")
+        print(f"{target}: {line}"); return
+    rep = fresh_report()
+    if "--json" in a:
+        print(json.dumps(rep, ensure_ascii=False, indent=1)); return
+    print(f"# Freshness — {TODAY.isoformat()}\n> Suggestions only: nothing changes by itself. A note nobody looked at for a while is not wrong for that reason.\n")
+    print(f"## Notes to review ({len(rep['review'])})")
+    for r in sorted(rep["review"], key=lambda r: -r["days"]):
+        print(f"- [[{name_of(r['note'])}]] ({r['type']}) — not looked at for {r['days']} days (window {r['window']}); if it still holds: `fresh --reviewed \"{name_of(r['note'])}\"`")
+    print(f"\n## Lines resting on an invalid decision ({len(rep['invalid'])})")
+    for r in rep["invalid"]:
+        print(f"- [[{name_of(r['note'])}]]:{r['line']} → [[{r['target']}]] ({r['why']}) — {r['text']}")
+    print(f"\n## Line level ({len(rep['claims'])})")
+    for r in rep["claims"]:
+        print(f"- [[{name_of(r['note'])}]]:{r['line']} · {FRESH_KIND[r['kind']]} — {r['text']}")
+    if rep["claims"]:
+        print("\nThree answers per line: observe again and stamp it `(as of YYYY-MM-DD)` · turn it into a pointer (\"current: [[Board]]\") · move it to a dated note/heading. "
+              "If the line is an example, end it with `" + EXAMPLE_TAG + "`.")
+
+
 def cmd_history(a):
     import vault_history
     h = vault_history.H(VAULT)
@@ -1433,6 +1610,8 @@ if __name__ == "__main__":
         af = _opt(a, "--allow")
         allow = {l.strip() for l in open(af, encoding="utf-8") if l.strip()} if af else None
         cmd_search(" ".join(a[1:]), k, ex, allow)
+    elif cmd == "fresh":
+        cmd_fresh(a[1:])
     elif cmd == "memory":
         cmd_memory(a[1:])
     elif cmd == "pack":

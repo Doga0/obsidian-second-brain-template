@@ -59,6 +59,7 @@ Maximum depth is `Area/Category/Project/note`. Don't create new top-level folder
 | `origin` | decision: `user` · `ai-suggestion` |
 | `ai`, `ai_note` | a request for the AI: connect · distill · challenge · summarize · ingest · brief (+ instruction). Remove when done |
 | `example` | `true` on the template's sample notes (removed by `clean-examples`) |
+| `reviewed` | `YYYY-MM-DD`: the user's "I checked it, it still holds" mark (`fresh --reviewed`); resets the freshness clock |
 | `aliases`, `summary`, `split: no` | optional |
 
 No tags. Don't invent fields; propose them.
@@ -72,6 +73,7 @@ python "99 System/scripts/vault_tool.py" pack [--project <Hub>]   # budgeted con
 python "99 System/scripts/vault_tool.py" memory <Hub> [--init] [--since]  # project memory; --since: changes since the last session
 python "99 System/scripts/vault_tool.py" tasks [--project X] [--json]
 python "99 System/scripts/vault_tool.py" lint                     # writes Health.md
+python "99 System/scripts/vault_tool.py" fresh [--reviewed <note>]  # freshness: notes to review, lines resting on invalid decisions, undated changing claims
 python "99 System/scripts/vault_tool.py" index                    # writes Index.md
 python "99 System/scripts/vault_tool.py" queue                    # AI queue
 python "99 System/scripts/vault_tool.py" log <op> "<text>"
@@ -87,6 +89,8 @@ MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scop
 Retrieval order: L0 context (in Claude Code it arrives at session start through the SessionStart hook in `.claude/settings.json`; elsewhere run `pack`, over MCP `vault_context`), then `pack --project <hub>` for project work, then `search`, then read only the relevant line ranges. `99 System/Index.md` is large: use it only for a vault-wide survey or the full list. Don't read long source notes end to end.
 
 ## 4. Note types
+**Freshness:** when you write a fact that changes (open task counts, user/star counts, prices, balances, the "current" state of something), either stamp it (`… (as of YYYY-MM-DD)`) or point to where the truth lives ("current: [[Board]]"). Dated notes (meetings, analyses, reviews), dated headings and the Experiment log are history already. `fresh` only makes suggestions; never change a note on its own.
+
 Format settings in `99 System/config.json`: `format_check` (default false; when true the MCP tools refuse writes that break a note's format and a Claude Code hook in `.claude/settings.json` checks every Edit/Write) and `title_heading` (default true; false = the file name is the title, so notes don't repeat it as `# Title`).
 Templates live in `99 System/Templates/`. Hubs share these sections: Goal · Status · Decisions (embedded Base) · Open questions · Tasks (sb-board) · Experiment log · Related.
 - **Task card** (`Personal/15 Tasks/<Project>/` or `Work/50 Tasks/<Project>/<short title>.md`, by the project's area; folder root without a project. When a card's `project` changes, the board plugin moves it to the new project folder): `type: task`, `status`, `project`, optional `priority`/`due`; body: Description · Subtasks (checklist) · Notes. Hubs don't keep task checklists; they embed an `sb-board` block (`type: task`, `project: <Hub>`). The user drives the board: only change a card's `status` when asked.

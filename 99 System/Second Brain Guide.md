@@ -231,6 +231,12 @@ Second Brain Tools is desktop-only (it uses Node for the spreadsheet view, git a
 - No auto-formatter (*Linter*): it rewrites notes on save and could change raw source notes (`type: source`).
 - Latex Suite's `mk` shortcut only fires as a separate word, so it doesn't trigger inside ordinary words.
 
+## Keeping knowledge fresh
+Notes age, but a note nobody looked at for a while is not wrong for that reason. Nothing is changed or deleted by itself; the vault only tells you what to look at (`vault_tool.py fresh`; summarised in Health, in the weekly review and in `/sb-lint --deep`):
+- **Notes to review:** notes not looked at for longer than their type's window (knowledge 180 days, resource/organization cards 120–180 days; `config.json` → `freshness.review_days`). If you read it and it still holds, `fresh --reviewed "<note>"` (or set the `reviewed` property to today): the clock resets, and search treats the note as fresh.
+- **Lines resting on an invalid decision:** lines that link to a `superseded`/`rejected` decision (or to a note another note replaces through `supersedes:`); a line that says "old / replaced / instead" is not counted.
+- **Undated changing claims:** numbers like "the project has 17 open tasks" written without a date, which turn false over time. Every fact is either timeless, dated (`… (as of 2026-11-27)`), or a pointer to where the truth lives ("current: [[Board]]"). Old stamps (default 30 days) and impossible dates are listed too. The answer is one of three: observe again and update the stamp · turn it into a pointer · move it to a dated note/heading. Dated notes (meetings, analyses, reviews), dated headings, the Experiment log, source notes and task cards are exempt. End a line you wrote as an example with `<!-- freshness: example -->`.
+
 ## Weekly maintenance (15 min)
 1. `/sb-review`: weekly review note with focus, dates, pending decisions, maintenance list.
 2. `/sb-inbox`: empty the Inbox with one approval table.

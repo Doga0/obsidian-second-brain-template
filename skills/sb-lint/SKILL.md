@@ -14,6 +14,9 @@ description: "Second Brain — Vault health check: broken links, orphans, missin
 5. Apply what's approved. The raw-content rule still holds: in source notes only frontmatter and the callout may change.
 5. With `--deep`, also check:
    - **Contradictions** between notes on the same topic (different statements about the same concept or decision). Show the evidence and propose a `> [!warning]` callout on the hub.
+   - **Freshness** (`vault_tool.py fresh`): notes nobody looked at for a long time, lines resting on a superseded/rejected decision, changing numbers written without a date stamp, and old stamps. Suggest one move for each: if it still holds, `fresh --reviewed "<note>"`; for a changing claim, observe again and stamp it `(as of YYYY-MM-DD)` · turn it into a pointer ("current: [[Board]]") · move it to a dated note; for a line resting on an invalid decision, suggest linking the current decision. Not being looked at does not make a note wrong: read it and put the really doubtful ones first.
    - **Outdated claims**: deadlines already in the past, "not announced yet", version claims. List what needs verifying.
+   - **Clashes with new sources**: places where source notes added in the last 30 days contradict older knowledge/hub claims.
    - `seed` knowledge notes unchanged for 30+ days: suggest `/sb-distill`.
+   - If you write `--deep` findings into notes (with approval), put them in a `> [!warning] AI observation (date)` callout; don't change the note's text.
 6. Run `lint` again and report the before/after difference. Then `vault_tool.py log lint "<summary>"`.
