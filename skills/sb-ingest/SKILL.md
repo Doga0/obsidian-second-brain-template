@@ -12,7 +12,7 @@ Follow `CLAUDE.md` (protected folders, immutable raw content, propose then write
 - **Pasted text / AI chat**: put it **unchanged** under "Raw content" in a `Source Note`, then process it.
 
 ## Steps
-1. Read `99 System/Index.md`. Run `vault_tool.py search` with the note's key terms (2–3 queries, including synonyms).
+1. Take the active projects from the L0 context (added by a hook at session start; otherwise `vault_tool.py pack`). Run `vault_tool.py search` with the note's key terms (2–3 queries, including synonyms). If the note will go to a project, see its decisions and notes with `pack --project <hub>`. Read `99 System/Index.md` only if the projects and MOCs are not enough to classify it.
 2. **Classify:** `type`, target folder (existing project/research, new one, idea, knowledge?), `project`, `topics`. If unsure, offer the two most likely options.
 3. **Link candidates:** for each, give the relation (complements / contradicts / example of / continues) and a one-sentence reason. Drop weak ones.
 4. **Show a plan table:**

@@ -4,7 +4,7 @@ description: "Second Brain — Current status brief for a project or research ar
 ---
 # /sb-brief
 
-1. Run `vault_tool.py context <hub>` and `vault_tool.py tasks --project <hub>`. Read the hub and the `Decision - *` notes in its folder. Sort the folder's files by modification date. Check recent entries in `99 System/Log.md` for this project. Get what changed and when with `vault_tool.py timeline --project <hub> --since <~2 weeks ago>` (decision status changes, task status, experiments).
+1. Get the project's context pack with `vault_tool.py pack --project <hub>`: goal, status, decisions (with their status), board, open questions, next steps, recent Log entries and recently changed notes in one call. Read only what the pack left out (including sections dropped for the budget) from the hub or the `Decision - *` notes, by line range. Get what changed and when with `vault_tool.py timeline --project <hub> --since <~2 weeks ago>` (decision status changes, task status, experiments).
 2. Output (about 25 lines max):
    - **Goal** (1 sentence)
    - **Where you left off**: recently changed notes with dates, the latest decision (from the timeline: what changed, when)

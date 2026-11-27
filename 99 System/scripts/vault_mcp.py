@@ -4,7 +4,7 @@
 Exposes this vault to MCP clients (Claude Desktop, Claude Code, Codex, other agents) with the same
 rules as CLAUDE.md:
   - protected folders (99 System/config.json -> "protected") are invisible: not listed, searched or read
-  - read tools: index, search, read_note, note_context, list_tasks, list_notes
+  - read tools: context (budgeted L0/L1 pack), index, search, read_note, note_context, list_tasks, list_notes
   - create tools write NEW notes (capture to 00 Inbox, task cards in 15 Tasks/<Project>); the narrow edit tools
     in vault_mcp_edit.py (create_note, set_property, edit_text, append, add_link, set_context, move_note,
     maintain) enforce the CLAUDE.md rules; there is no delete/merge/rename; every write is logged to 99 System/Log.md
@@ -275,6 +275,24 @@ def locked_index(ok, sc):
         extra = summary.get(base.casefold(), "")
         out.append(f"- [[{base}]]" + (f" ({t})" if t and not extra else "") + (f" {extra}" if extra else ""))
     return "\n".join(out) if len(out) > 1 else "(no notes in the locked projects)"
+
+
+def t_pack(a):
+    """Budgeted context pack: L0 vault overview, or L1 for one project (lock-aware)."""
+    sc = scope_of(a)
+    proj = str(a.get("project") or "").strip()
+    if not proj and len(LOCK["projects"]) == 1:
+        proj = LOCK["projects"][0]
+    if proj:
+        name = resolve_project(proj)
+        check_project(name)
+        args = ["pack", "--project", name]
+        if a.get("budget"):
+            args += ["--budget", str(int(a["budget"]))]
+        return run_tool(*args, "--scope", sc)
+    if LOCK["projects"]:
+        return run_tool("pack", "--only", "|".join(LOCK["projects"]), "--scope", sc)
+    return run_tool("pack", "--scope", sc)
 
 
 def t_index(a):
@@ -615,7 +633,8 @@ SCOPE_PROP = {"type": "string", "enum": ["personal", "work", "all"],
               "description": "Area: personal (Personal/), work (Work/) or all. Reads default to all."}
 S = lambda props, req=(): {"type": "object", "properties": dict(props, scope=SCOPE_PROP), "required": list(req)}
 TOOLS = {
-    "vault_index": (t_index, "Returns the vault catalog (99 System/Index.md): type, status and summary of every note; scope narrows it to the Personal or Work section. Read this first.", S({}), True),
+    "vault_context": (t_pack, "Budgeted context pack; start here. Without project, L0: active projects, in-progress and overdue tasks, what is waiting (~2.5 KB). With project, L1: the hub's goal/status/open questions, decisions, board, recent changes, project notes (~7 KB, change with budget). Then use vault_search and vault_read_note for detail.", S({"project": STR, "budget": INT}), True),
+    "vault_index": (t_index, "The full vault catalog (99 System/Index.md): type, status and summary of every note; scope narrows it to the Personal or Work section. Large (tens of KB): use it only when you need the full list or a vault-wide survey; vault_context + vault_search cover normal work.", S({}), True),
     "vault_search": (t_search, "Ranked keyword search over note sections (accent-insensitive), limited by scope. Returns file paths and line numbers.", S({"query": STR, "k": INT}, ["query"]), True),
     "vault_read_note": (t_read, "Reads a note with line numbers. path: vault-relative path or note name. Use offset/limit to read a section.", S({"path": STR, "offset": INT, "limit": INT}, ["path"]), True),
     "vault_note_context": (t_context, "Frontmatter, heading outline, outgoing links and backlinks of a note.", S({"note": STR}, ["note"]), True),
@@ -642,7 +661,7 @@ def handle(msg):
         ver = (msg.get("params") or {}).get("protocolVersion") or PROTOCOL
         return {"protocolVersion": ver, "capabilities": {"tools": {"listChanged": False}, "prompts": {"listChanged": False}},
                 "serverInfo": {"name": "second-brain", "version": "1.0.0"},
-                "instructions": "An Obsidian vault with two areas, Personal/ and Work/ (scope: personal | work | all). Start with vault_index, then vault_search and vault_read_note. "
+                "instructions": "An Obsidian vault with two areas, Personal/ and Work/ (scope: personal | work | all). Start with vault_context (with project for project work), then vault_search and vault_read_note; vault_index only for the full list. "
                                 "Use the write and edit tools only when the user asks; the ones that need approval return a plan without confirm=true." +
                                 ((" This server is locked to these projects: " + ", ".join(LOCK["projects"]) +
                                   ". Other projects, tasks and notes are not visible; do not look for them.") if LOCK["projects"] else "") + missing_note()}

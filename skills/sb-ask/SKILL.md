@@ -4,7 +4,7 @@ description: "Second Brain — Answer a question from the vault's notes with cit
 ---
 # /sb-ask
 
-1. Read `99 System/Index.md` and pick the hubs, MOCs and knowledge notes relevant to the question.
+1. Context: use the L0 context from the session start (Claude Code adds it with a hook; otherwise run `vault_tool.py pack`). If the question is about a project, get that project's pack with `vault_tool.py pack --project <hub>` (goal, status, decisions, board, recent changes). Read `99 System/Index.md` only when the question spans the whole vault or search finds nothing.
 2. Run at least two `vault_tool.py search` queries (different wordings, synonyms, other languages used in the vault). Read the relevant sections by line number (a file reading tool with offset/limit). Use `context` to follow neighbouring notes. If the question is about time ("why did we change this", "what were we using last month", "after which experiment"), look at past versions with `vault_tool.py timeline --project <hub>`, `history <note>` and `at <note> <YYYY-MM-DD>`, and give the date and version in the answer.
 3. Answer in this structure:
    - **Short answer** (2–4 sentences)

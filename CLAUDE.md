@@ -68,6 +68,7 @@ No tags. Don't invent fields; propose them.
 python "99 System/scripts/vault_tool.py" search <query> [--k N] [--explain]   # section-level ranked search, one row per note
 python "99 System/scripts/vault_tool.py" evalsearch [--compare F]  # search quality on 99 System/eval/search_cases.jsonl (recall@K, MRR); run before and after changing search
 python "99 System/scripts/vault_tool.py" context <note>           # outline, links, backlinks
+python "99 System/scripts/vault_tool.py" pack [--project <Hub>]   # budgeted context: L0 vault overview (~2.5 KB) / L1 project pack (~7 KB)
 python "99 System/scripts/vault_tool.py" tasks [--project X] [--json]
 python "99 System/scripts/vault_tool.py" lint                     # writes Health.md
 python "99 System/scripts/vault_tool.py" index                    # writes Index.md
@@ -82,7 +83,7 @@ python "99 System/scripts/vault_tool.py" timeline --project <Hub>  # decisions, 
 All of them take `--scope personal|work|all` (import defaults to personal; `--scope work` → `Work/00 Inbox` + `Work/60 Attachments`). `Index.md` is split into Personal / Work / Shared sections.
 (On Windows, add `-X utf8` after `python` if file names have non-ASCII characters.)
 MCP server: `99 System/scripts/vault_mcp.py` (same rules; every tool takes `scope`; protected folders are invisible; writes go to the project's area; the edit tools in `vault_mcp_edit.py` enforce these rules server-side, and there is no delete/merge/rename). Started with `--project "<Hub>"` (or `SB_PROJECTS`) it only sees those projects' notes and tasks; see Guide → MCP. Skills are also served as MCP prompts (and through the `vault_skill` tool).
-Retrieval order: `99 System/Index.md`, then `search`, then read only the relevant line ranges. Don't read long source notes end to end.
+Retrieval order: L0 context (in Claude Code it arrives at session start through the SessionStart hook in `.claude/settings.json`; elsewhere run `pack`, over MCP `vault_context`), then `pack --project <hub>` for project work, then `search`, then read only the relevant line ranges. `99 System/Index.md` is large: use it only for a vault-wide survey or the full list. Don't read long source notes end to end.
 
 ## 4. Note types
 Format settings in `99 System/config.json`: `format_check` (default false; when true the MCP tools refuse writes that break a note's format and a Claude Code hook in `.claude/settings.json` checks every Edit/Write) and `title_heading` (default true; false = the file name is the title, so notes don't repeat it as `# Title`).

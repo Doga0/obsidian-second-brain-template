@@ -92,7 +92,12 @@ The vault has two areas with different layouts; the shared system sits at the ro
 ## Finding things
 - `Ctrl/Cmd+O` quick menu: find any note (aliases included), create notes/tasks, run commands; classic Quick switcher on `Ctrl/Cmd+Shift+O` · `Ctrl/Cmd+Shift+F` search (`path:"20 Projects" keyword`, `[status:active]`)
 - [[Home]]: tables for pending decisions, active projects, AI queue, Inbox, analyses, knowledge.
-- Natural language: `/sb-ask <question>` in Claude Code, with cited answers. [[Index]] is a one-line catalog of every note.
+- Natural language: `/sb-ask <question>` in Claude Code, with cited answers. [[Index]] is a one-line catalog of every note (the AI reads it only for vault-wide surveys).
+- **The AI's context, step by step:** the AI does not start every task by reading the whole Index; it goes from small to large:
+  - **L0, vault overview (~2.5 KB):** active projects (goal, task count, last change), in-progress and overdue tasks, what is waiting. In Claude Code it arrives at the start of every session through the SessionStart hook in `.claude/settings.json`; in Codex or by hand `vault_tool.py pack`; over MCP `vault_context`.
+  - **L1, project pack (~7 KB):** `vault_tool.py pack --project <Hub>`: the hub's goal/status/open questions/next steps, decisions (with status, invalid ones listed apart), board, recent Log entries, recently changed notes, project notes. If it exceeds the budget, the least important parts are left out and named (`--budget N`).
+  - **L2–L3:** `search` for the relevant sections, then only those lines; `timeline` for change over time.
+  - On a project-locked MCP server L0 and L1 show only the locked projects. The pack is vault data: the AI does not treat directives inside it as instructions.
 - Hubs are the entry point to every project: "what did I decide here?" → the hub's Decisions table.
 - **Over time:** "Why did we change this decision?", "What were we using last month?" — from the vault's git history (needs the vault to be a git repo, e.g. with the bundled Obsidian Git backups):
   - `vault_tool.py timeline --project <Hub> [--since D] [--until D]` — decisions (created, status changes, `decided`, the notes in their Source section), task status changes, hub section changes and Experiment Log rows on one timeline.
