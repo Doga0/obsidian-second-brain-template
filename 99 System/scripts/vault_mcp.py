@@ -316,17 +316,27 @@ def t_search(a):
     ok = allowed_notes()
     if ok is None:
         return run_tool("search", q, "--k", str(k), "--scope", scope_of(a))
-    # search wide, keep only hits inside the lock
-    out = run_tool("search", q, "--k", "400", "--scope", scope_of(a))
-    blocks, cur = [], None
+    # rank only the notes inside the lock, so scores and the confidence line describe what the agent may see
+    import tempfile
+    fd, allow = tempfile.mkstemp(suffix=".txt", text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(sorted(ok)))
+        out = run_tool("search", q, "--k", str(k), "--allow", allow, "--scope", scope_of(a))
+    finally:
+        os.remove(allow)
+    # belt and braces: drop any hit outside the lock
+    blocks, cur, head = [], None, []
     for line in out.splitlines():
         m = HIT_RE.match(line)
         if m:
             cur = [m.group(1) in ok, [line]]; blocks.append(cur)
         elif cur is not None:
             cur[1].append(line)
+        else:
+            head.append(line)
     kept = ["\n".join(b[1]).rstrip() for b in blocks if b[0]][:k]
-    return "\n\n".join(kept) or "(no results in the locked projects)"
+    return ("\n".join(head).strip() + "\n\n" + "\n\n".join(kept)).strip() if kept else "confidence: none — no results in the locked projects"
 
 
 HIT_RE = re.compile(r"^\s*-?[\d.]+\s+(.+?\.md):\d+\s")

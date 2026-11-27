@@ -491,7 +491,8 @@ TYPE_WORDS = {"decision": "decision adr", "task": "task", "meeting": "meeting", 
               "org": "organization", "source": "source"}
 SEARCH_CFG = {"type_weight": {"system": 0.6, "source": 0.85, "analysis": 0.9, "moc": 0.9},
               "stale": ["superseded", "rejected", "dropped", "archived"], "stale_weight": 0.6, "done_task_weight": 0.85,
-              "now_live": ["accepted", "active", "doing", "evergreen"], "now_live_weight": 1.3, "now_stale_weight": 0.45}
+              "now_live": ["accepted", "active", "doing", "evergreen"], "now_live_weight": 1.3, "now_stale_weight": 0.45,
+              "strong_cov": 0.8, "medium_cov": 0.5, "medium_score": 5.0}
 SEARCH_CFG.update(CFG.get("search", {}) if isinstance(CFG.get("search"), dict) else {})
 SYSTEM_NOTES = {"CLAUDE.md", "README.md", "Home.md", "Board.md", QUEUE_NOTE, f"{SYSTEM}/Second Brain Guide.md"}
 
@@ -536,7 +537,7 @@ def note_weight(n, meta, now, superseded):
         if stale:
             w *= SEARCH_CFG["now_stale_weight"]; why.append(f"stale×{SEARCH_CFG['now_stale_weight']}")
         elif meta["type"] == "task" and st == "done":
-            w *= SEARCH_CFG["now_stale_weight"]; why.append(f"done×{SEARCH_CFG['now_stale_weight']}")
+            w *= SEARCH_CFG["now_stale_weight"]; why.append(f"bitti×{SEARCH_CFG['now_stale_weight']}")
         elif st in SEARCH_CFG["now_live"]:
             w *= SEARCH_CFG["now_live_weight"]; why.append(f"{st}×{SEARCH_CFG['now_live_weight']}")
         f = 0.6 + 0.4 * math.exp(-_age_days(n, meta) / 130.0)
@@ -544,13 +545,15 @@ def note_weight(n, meta, now, superseded):
     elif stale:
         w *= SEARCH_CFG["stale_weight"]; why.append(f"{'superseded' if name_of(n) in superseded else st}×{SEARCH_CFG['stale_weight']}")
     elif meta["type"] == "task" and st == "done":
-        w *= SEARCH_CFG["done_task_weight"]; why.append(f"done×{SEARCH_CFG['done_task_weight']}")
+        w *= SEARCH_CFG["done_task_weight"]; why.append(f"bitti×{SEARCH_CFG['done_task_weight']}")
     return w, why
 
 
-def search_rank(q):
+def search_rank(q, allow=None):
     """One row per note, best first: (score, note, line, heading, body, info).
-    info: {"also": [(line, heading, score)] other matching sections, "why": scoring explanation}.
+    info: {"also": [(line, heading, score)] other matching sections, "why": scoring explanation,
+           "cov": share of query terms in the best section, "ncov": share of query terms anywhere in the note}.
+    allow: optional set of note paths (e.g. a project lock); other notes are not ranked.
     Sections are scored with BM25 over the section text plus a context prefix (note name, project, type words,
     parent headings); the note keeps its best section, then type/status/'now' weights apply."""
     qt, now = parse_query(q)
@@ -558,7 +561,7 @@ def search_rank(q):
         return []
     docs, metas = [], {}
     for n in NOTES:
-        if is_template(n) or n in GENERATED or not in_scope(n):
+        if is_template(n) or n in GENERATED or not in_scope(n) or (allow is not None and n not in allow):
             continue
         meta = metas[n] = note_meta(n)
         prefix = TOKEN.findall(norm(" ".join([name_of(n), meta["project"], TYPE_WORDS.get(meta["type"], "")])))
@@ -577,7 +580,7 @@ def search_rank(q):
         for t in set(qt):
             if any(tok.startswith(t) for tok in d[4]):
                 df[t] += 1
-    best = {}
+    best, hit_terms = {}, defaultdict(set)
     for n, ln, h, body, c, L in docs:
         s = 0.0
         for t in qt:
@@ -588,25 +591,43 @@ def search_rank(q):
             s += idf * tf * 2.2 / (tf + 1.2 * (0.25 + 0.75 * L / avg))
             if t in norm(h) or t in norm(name_of(n)):
                 s += idf * 1.5
-        covered = sum(1 for t in qt if any(tok.startswith(t) for tok in c))
-        s *= (covered / len(qt)) ** 1.5
+        found = {t for t in qt if any(tok.startswith(t) for tok in c)}
+        hit_terms[n] |= found
+        s *= (len(found) / len(qt)) ** 1.5
         if s > 0:
-            best.setdefault(n, []).append((s, ln, h, body))
+            best.setdefault(n, []).append((s, ln, h, body, len(found) / len(qt)))
     superseded = {x for n in best for x in metas[n]["supersedes"]}
     exact = {norm(q).strip()}
     rows = []
     for n, secs in best.items():
         secs.sort(key=lambda x: -x[0])
-        s0, ln, h, body = secs[0]
+        s0, ln, h, body, cov = secs[0]
         w, why = note_weight(n, metas[n], now, superseded)
         s = s0 * w
         if norm(name_of(n)) in exact or any(norm(a) in exact for a, t in ALIASES.items() if t == n):
             s += 100; why.append("name match")
         info = {"also": [(x[1], x[2], round(x[0] * w, 2)) for x in secs[1:4]],
-                "why": f"section {s0:.2f}" + (" · " + " · ".join(why) if why else "") + (" · intent: now" if now else "")}
+                "why": f"section {s0:.2f}" + (" · " + " · ".join(why) if why else "") + (" · intent: now" if now else ""),
+                "cov": round(cov, 2), "ncov": round(len(hit_terms[n]) / len(qt), 2), "nterms": len(qt)}
         rows.append((s, n, ln, h, body, info))
     rows.sort(key=lambda r: -r[0])
     return rows
+
+
+def confidence(rows):
+    """('strong'|'medium'|'weak'|'none', reason) for a ranked result list — tells the caller whether to read and answer,
+    read more, or search again with other words. Relative signals only: a fixed score threshold did not separate
+    answerable from unanswerable questions in the eval (thresholds: config "search" → strong_cov, medium_cov, medium_score)."""
+    if not rows:
+        return "none", "no matching note"
+    s1, info = rows[0][0], rows[0][5]
+    ratio = s1 / rows[1][0] if len(rows) > 1 and rows[1][0] > 0 else None
+    why = f"the best section of result #1 holds {round(info['cov'] * 100)}% of the query terms; score {s1:.1f}" + (f", {ratio:.1f}× result #2" if ratio else "")
+    if info["cov"] >= SEARCH_CFG["strong_cov"]:
+        return "strong", why
+    if info["cov"] >= SEARCH_CFG["medium_cov"] and s1 >= SEARCH_CFG["medium_score"]:
+        return "medium", why
+    return "weak", why
 
 
 def format_hits(q, hits, explain=False):
@@ -625,12 +646,14 @@ def format_hits(q, hits, explain=False):
     return "\n".join(out)
 
 
-def cmd_search(q, k=12, explain=False):
+def cmd_search(q, k=12, explain=False, allow=None):
     if not query_terms(q):
         print("empty query"); return
-    hits = search_rank(q)[:k]
-    if hits:
-        print(format_hits(q, hits, explain))
+    rows = search_rank(q, allow)
+    label, why = confidence(rows)
+    print(f"confidence: {label} — {why}\n")
+    if rows:
+        print(format_hits(q, rows[:k], explain))
 
 
 # ------------------------------------------------------------ retrieval eval
@@ -679,7 +702,7 @@ def run_eval(cases, neg_thr):
                 top[n] = s; notes.append(n)
         r = {"id": c["id"], "group": c["group"], "q": c["q"], "gold": c["gold"], "ms": round(ms),
              "chars": len(format_hits(c["q"], hits[:12])), "top1": notes[0] if notes else None,
-             "top1_score": round(top[notes[0]], 2) if notes else 0.0}
+             "top1_score": round(top[notes[0]], 2) if notes else 0.0, "conf": confidence(hits)[0]}
         if c["gold"]:
             r["rank"] = next((i + 1 for i, n in enumerate(notes) if any(_gold_hit(n, g) for g in c["gold"])), None)
         else:
@@ -702,6 +725,17 @@ def eval_metrics(rows):
     return m
 
 
+def conf_table(rows):
+    """How well the confidence label predicts the outcome: per label, answerable cases with gold at #1 / in the top 3,
+    and unanswerable cases that got the label."""
+    out = {}
+    for lab in ("strong", "medium", "weak", "none"):
+        pos = [r for r in rows if r["gold"] and r["conf"] == lab]
+        out[lab] = {"n": len(pos), "r@1": sum(1 for r in pos if r["rank"] == 1), "r@3": sum(1 for r in pos if r["rank"] and r["rank"] <= 3),
+                    "unanswerable": sum(1 for r in rows if not r["gold"] and r["conf"] == lab)}
+    return out
+
+
 def cmd_evalsearch(a):
     """Retrieval quality over labelled questions: recall@1/3/5/10, MRR@10, negative cases (no answer in the vault)."""
     path = _opt(a, "--cases") or EVAL_CASES
@@ -717,7 +751,7 @@ def cmd_evalsearch(a):
     groups = sorted({r["group"] for r in rows})
     report = {"date": TODAY.isoformat(), "cases": path, "neg_threshold": neg_thr,
               "all": eval_metrics(rows), "groups": {g: eval_metrics([r for r in rows if r["group"] == g]) for g in groups},
-              "rows": rows}
+              "confidence": conf_table(rows), "rows": rows}
     if save:
         os.makedirs(os.path.dirname(save) or ".", exist_ok=True)
         json.dump(report, open(save, "w", encoding="utf-8", newline="\n"), ensure_ascii=False, indent=1)
@@ -750,6 +784,10 @@ def cmd_evalsearch(a):
         print(f"\nQuestions without an answer that scored above the threshold ({neg_thr}):")
         for r in fp:
             print(f"- {r['id']}: {r['q']} → {r['top1']} ({r['top1_score']})")
+    print("\nConfidence label (answerable questions: gold at #1 / in the top 3 · unanswerable questions):")
+    for lab, m in report["confidence"].items():
+        if m["n"] or m["unanswerable"]:
+            print(f"- {lab}: {m['n']} questions, gold #1 in {m['r@1']}, in the top 3 in {m['r@3']} · unanswerable {m['unanswerable']}")
     pos_top = sorted(r["top1_score"] for r in rows if r["gold"] and r["rank"] == 1)
     neg_top = sorted(r["top1_score"] for r in rows if not r["gold"])
     if pos_top and neg_top:
@@ -1240,7 +1278,9 @@ if __name__ == "__main__":
             a = a[:i] + a[i + 2:]
         ex = "--explain" in a
         a = [x for x in a if x != "--explain"]
-        cmd_search(" ".join(a[1:]), k, ex)
+        af = _opt(a, "--allow")
+        allow = {l.strip() for l in open(af, encoding="utf-8") if l.strip()} if af else None
+        cmd_search(" ".join(a[1:]), k, ex, allow)
     elif cmd == "pack":
         cmd_pack(a[1:])
     elif cmd == "evalsearch":
